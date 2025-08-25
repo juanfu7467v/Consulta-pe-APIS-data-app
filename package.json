@@ -1,0 +1,16 @@
+{
+  "name": "consulta-pe-api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "firebase-admin": "^11.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "node-fetch": "^3.3.2"
+  }
+}
