@@ -1,14 +1,15 @@
 {
   "name": "consulta-pe-api",
   "version": "1.0.0",
-  "main": "server.js",
+  "type": "module",
+  "main": "server.mjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.mjs"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "firebase-admin": "^11.10.1",
-    "jsonwebtoken": "^9.0.2",
-    "node-fetch": "^2.6.7"
+    "express": "^4.19.2",
+    "dotenv": "^16.3.1",
+    "firebase-admin": "^12.0.0",
+    "cors": "^2.8.5"
   }
 }
