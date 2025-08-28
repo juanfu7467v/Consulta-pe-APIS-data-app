@@ -198,7 +198,92 @@ app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (
     await consumirAPI(res, `https://poxy-production.up.railway.app/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
 });
 
-// ... 🔥 y así hasta el endpoint 30 ...
+// 14 Reniec
+app.get("/api/reniec", authMiddleware, creditosMiddleware(10), async (req, res) => {
+    const { dni, source } = req.query;
+    await consumirAPI(res, `https://poxy-production.up.railway.app/reniec?dni=${dni}&source=${source}`);
+});
+
+// 15 Árbol Genealógico
+app.get("/api/arbol", authMiddleware, creditosMiddleware(18), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/arbol?dni=${req.query.dni}`);
+});
+
+// 16 Familia 1
+app.get("/api/familia1", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/familia1?dni=${req.query.dni}`);
+});
+
+// 17 Familia 2
+app.get("/api/familia2", authMiddleware, creditosMiddleware(15), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/familia2?dni=${req.query.dni}`);
+});
+
+// 18 Familia 3
+app.get("/api/familia3", authMiddleware, creditosMiddleware(18), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/familia3?dni=${req.query.dni}`);
+});
+
+// 19 Vehículos SUNARP
+app.get("/api/vehiculos", authMiddleware, creditosMiddleware(15), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/vehiculos?placa=${req.query.placa}`);
+});
+
+// 20 Telefonía por Documento
+app.get("/api/telefonia-doc", authMiddleware, creditosMiddleware(10), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/telefonia-doc?documento=${req.query.documento}`);
+});
+
+// 21 Telefonía por Número
+app.get("/api/telefonia-num", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/telefonia-num?numero=${req.query.numero}`);
+});
+
+// 22 Movimientos Migratorios
+app.get("/api/movimientos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/movimientos?dni=${req.query.dni}`);
+});
+
+// 23 Denuncias Policiales por DNI
+app.get("/api/denuncias-dni", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/denuncias-dni?dni=${req.query.dni}`);
+});
+
+// 24 Consulta de DNI básica
+app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
+    await consumirAPI(res, `https://poxy2-production.up.railway.app/dni?dni=${req.query.dni}`);
+});
+
+// 25 Consulta de RUC
+app.get("/api/ruc", authMiddleware, creditosMiddleware(5), async (req, res) => {
+    await consumirAPI(res, `https://poxy2-production.up.railway.app/ruc?ruc=${req.query.ruc}`);
+});
+
+// 26 Consulta de RUC (Anexos)
+app.get("/api/ruc-anexo", authMiddleware, creditosMiddleware(5), async (req, res) => {
+    await consumirAPI(res, `https://poxy2-production.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
+});
+
+// 27 Consulta de RUC (Representante Legal)
+app.get("/api/ruc-representante", authMiddleware, creditosMiddleware(5), async (req, res) => {
+    await consumirAPI(res, `https://poxy2-production.up.railway.app/ruc-representante?ruc=${req.query.ruc}`);
+});
+
+// 28 Consulta de Carnet de Extranjería (CEE)
+app.get("/api/cee", authMiddleware, creditosMiddleware(5), async (req, res) => {
+    await consumirAPI(res, `https://poxy2-production.up.railway.app/cee?cee=${req.query.cee}`);
+});
+
+// 29 Consulta de SOAT por Placa
+app.get("/api/soat-placa", authMiddleware, creditosMiddleware(5), async (req, res) => {
+    await consumirAPI(res, `https://poxy2-production.up.railway.app/placa?placa=${req.query.placa}`);
+});
+
+// 30 Consulta de Licencia de Conducir
+app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res) => {
+    await consumirAPI(res, `https://poxy2-production.up.railway.app/licencia?dni=${req.query.dni}`);
+});
+
 
 // ---------------------------------------------------
 app.get("/", (req, res) => {
