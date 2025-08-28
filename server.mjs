@@ -3,7 +3,7 @@ import express from "express";
 import admin from "firebase-admin";
 import dotenv from "dotenv";
 import axios from "axios";
-import cors from "cors"; // 👈 importante para Appcreator24
+import cors from "cors"; // 👈 necesario para Appcreator24
 
 dotenv.config();
 
@@ -88,7 +88,7 @@ const consumirAPI = async (res, url) => {
         res.json({ ok: true, data: response.data });
     } catch (error) {
         console.error("Error al consumir API:", error.message);
-        res.status(500).json({
+        res.status(error.response ? error.response.status : 500).json({
             ok: false,
             error: "Error en API externa",
             details: error.response ? error.response.data : error.message,
@@ -119,13 +119,59 @@ app.get("/api/trabajos", authMiddleware, creditosMiddleware(12), async (req, res
     await consumirAPI(res, `https://poxy-production.up.railway.app/trabajos?dni=${req.query.dni}`);
 });
 
-// ... (igual con los demás hasta el 30) ...
+// 5 Consumos
+app.get("/api/consumos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/consumos?dni=${req.query.dni}`);
+});
+
+// 6 Matrimonios
+app.get("/api/matrimonios", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/matrimonios?dni=${req.query.dni}`);
+});
+
+// 7 Empresas
+app.get("/api/empresas", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/empresas?dni=${req.query.dni}`);
+});
+
+// 8 Direcciones
+app.get("/api/direcciones", authMiddleware, creditosMiddleware(10), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/direcciones?dni=${req.query.dni}`);
+});
+
+// 9 Correos
+app.get("/api/correos", authMiddleware, creditosMiddleware(10), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/correos?dni=${req.query.dni}`);
+});
+
+// 10 Sunat DNI o RUC
+app.get("/api/sunat", authMiddleware, creditosMiddleware(12), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/sunat?data=${req.query.data}`);
+});
+
+// 11 Sunat Razon Social
+app.get("/api/sunat-razon", authMiddleware, creditosMiddleware(10), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/sunat-razon?data=${req.query.data}`);
+});
+
+// 12 Fiscalía DNI
+app.get("/api/fiscalia-dni", authMiddleware, creditosMiddleware(15), async (req, res) => {
+    await consumirAPI(res, `https://poxy-production.up.railway.app/fiscalia-dni?dni=${req.query.dni}`);
+});
+
+// 13 Fiscalía Nombres
+app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (req, res) => {
+    const { nombres, apepaterno, apematerno } = req.query;
+    await consumirAPI(res, `https://poxy-production.up.railway.app/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
+});
+
+// ... 🔥 y así hasta el endpoint 30 ...
 
 // ---------------------------------------------------
 app.get("/", (req, res) => {
     res.json({
         ok: true,
-        mensaje: "🚀 API Consulta PE funcionando con Firebase + 30 endpoints (CORS habilitado)",
+        mensaje: "🚀 API Consulta PE funcionando en Railway con Firebase + 30 endpoints (CORS habilitado)",
     });
 });
 
