@@ -52,8 +52,38 @@ const authMiddleware = async (req, res, next) => {
         const userData = userDoc.data();
         const userId = userDoc.id;
 
-        if (userData.tipoPlan === "creditos" && userData.creditos <= 0) {
-            return res.status(402).json({ ok: false, error: "No te quedan créditos, recarga tu plan" });
+        // --- Validar plan de créditos ---
+        if (userData.tipoPlan === "creditos") {
+            if (!userData.creditos || userData.creditos <= 0) {
+                return res.status(402).json({
+                    ok: false,
+                    error: "No te quedan créditos, recarga tu plan para seguir consultando",
+                });
+            }
+        }
+
+        // --- Validar plan ilimitado ---
+        if (userData.tipoPlan === "ilimitado") {
+            const fechaActivacion = userData.fechaActivacion ? userData.fechaActivacion.toDate() : null;
+            const duracion = userData.duracionDias || 0;
+
+            if (fechaActivacion && duracion > 0) {
+                const fechaFin = new Date(fechaActivacion);
+                fechaFin.setDate(fechaFin.getDate() + duracion);
+
+                const hoy = new Date();
+                if (hoy > fechaFin) {
+                    return res.status(403).json({
+                        ok: false,
+                        error: "Tu plan ilimitado ha vencido, renueva tu plan para seguir consultando",
+                    });
+                }
+            } else {
+                return res.status(403).json({
+                    ok: false,
+                    error: "Tu plan ilimitado no es válido, por favor contacta soporte",
+                });
+            }
         }
 
         req.user = { id: userId, ...userData };
@@ -68,7 +98,10 @@ const creditosMiddleware = (costo) => {
     return async (req, res, next) => {
         if (req.user.tipoPlan === "creditos") {
             if (req.user.creditos < costo) {
-                return res.status(402).json({ ok: false, error: "Créditos insuficientes" });
+                return res.status(402).json({
+                    ok: false,
+                    error: "Créditos insuficientes, recarga tu plan",
+                });
             }
             const userRef = db.collection("usuarios").doc(req.user.id);
             await userRef.update({
