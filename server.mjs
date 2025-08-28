@@ -3,13 +3,13 @@ import express from "express";
 import admin from "firebase-admin";
 import dotenv from "dotenv";
 import axios from "axios";
-import cors from "cors"; // 👈 necesario para Appcreator24
+import cors from "cors"; 
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // 👈 habilitar CORS
+app.use(cors()); 
 
 // -------------------- FIREBASE --------------------
 const serviceAccount = {
@@ -75,7 +75,7 @@ const authMiddleware = async (req, res, next) => {
                 if (hoy > fechaFin) {
                     return res.status(403).json({
                         ok: false,
-                        error: "Tu plan ilimitado ha vencido, renueva tu plan para seguir consultando",
+                        error: "Sopresa, tu plan ilimitado ha vencido, renueva tu plan para seguir consultando",
                     });
                 }
             } else {
@@ -204,7 +204,7 @@ app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (
 app.get("/", (req, res) => {
     res.json({
         ok: true,
-        mensaje: "🚀 API Consulta PE funcionando en Railway con Firebase + 30 endpoints (CORS habilitado)",
+        mensaje: "🚀 API Consulta PE funcionando correctamente. (CORS habilitado)",
     });
 });
 
