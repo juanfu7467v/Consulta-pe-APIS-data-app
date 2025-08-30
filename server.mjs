@@ -249,6 +249,8 @@ app.get("/api/denuncias-dni", authMiddleware, creditosMiddleware(12), async (req
     await consumirAPI(res, `https://poxy-production.up.railway.app/denuncias-dni?dni=${req.query.dni}`);
 });
 
+// -------------------- ENDPOINTS ACTUALIZADOS (poxy2) --------------------
+
 // 24 Consulta de DNI básica
 app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
     await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/dni?dni=${req.query.dni}`);
@@ -261,7 +263,7 @@ app.get("/api/ruc", authMiddleware, creditosMiddleware(5), async (req, res) => {
 
 // 26 Consulta de RUC (Anexos)
 app.get("/api/ruc-anexo", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https:/poxy2-production-987f.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
+    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
 });
 
 // 27 Consulta de RUC (Representante Legal)
@@ -283,7 +285,6 @@ app.get("/api/soat-placa", authMiddleware, creditosMiddleware(5), async (req, re
 app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res) => {
     await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/licencia?dni=${req.query.dni}`);
 });
-
 
 // ---------------------------------------------------
 app.get("/", (req, res) => {
