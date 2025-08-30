@@ -251,37 +251,37 @@ app.get("/api/denuncias-dni", authMiddleware, creditosMiddleware(12), async (req
 
 // 24 Consulta de DNI básica
 app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production.up.railway.app/dni?dni=${req.query.dni}`);
+    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/dni?dni=${req.query.dni}`);
 });
 
 // 25 Consulta de RUC
 app.get("/api/ruc", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production.up.railway.app/ruc?ruc=${req.query.ruc}`);
+    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/ruc?ruc=${req.query.ruc}`);
 });
 
 // 26 Consulta de RUC (Anexos)
 app.get("/api/ruc-anexo", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
+    await consumirAPI(res, `https:/poxy2-production-987f.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
 });
 
 // 27 Consulta de RUC (Representante Legal)
 app.get("/api/ruc-representante", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production.up.railway.app/ruc-representante?ruc=${req.query.ruc}`);
+    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/ruc-representante?ruc=${req.query.ruc}`);
 });
 
 // 28 Consulta de Carnet de Extranjería (CEE)
 app.get("/api/cee", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production.up.railway.app/cee?cee=${req.query.cee}`);
+    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/cee?cee=${req.query.cee}`);
 });
 
 // 29 Consulta de SOAT por Placa
 app.get("/api/soat-placa", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production.up.railway.app/placa?placa=${req.query.placa}`);
+    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/placa?placa=${req.query.placa}`);
 });
 
 // 30 Consulta de Licencia de Conducir
 app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production.up.railway.app/licencia?dni=${req.query.dni}`);
+    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/licencia?dni=${req.query.dni}`);
 });
 
 
