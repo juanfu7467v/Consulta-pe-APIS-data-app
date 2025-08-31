@@ -115,16 +115,41 @@ const creditosMiddleware = (costo) => {
 };
 
 // -------------------- HELPER API --------------------
-const consumirAPI = async (res, url) => {
+const consumirAPI = async (req, res, url) => {
     try {
         const response = await axios.get(url);
-        res.json({ ok: true, data: response.data });
+        
+        // --- PROCESAMIENTO DE RESPUESTA EXITOSA ---
+        const sanitizedData = { ...response.data.data };
+        delete sanitizedData["developed-by"];
+        delete sanitizedData["credits"];
+
+        res.json({ 
+            ok: true, 
+            data: sanitizedData, 
+            creditosRestantes: req.user.creditos 
+        });
+
     } catch (error) {
-        console.error("Error al consumir API:", error.message);
+        // --- PROCESAMIENTO DE RESPUESTA CON ERROR ---
+        const errorData = error.response ? error.response.data : {};
+        let errorMessage = "Error en API externa";
+
+        // Reemplazar mensajes específicos de la API externa
+        if (errorData.details && errorData.details.detalle && errorData.details.detalle.message.includes("Token con falta de pago")) {
+            errorMessage = "Error interno, por favor intenta más tarde o contacta a soporte.";
+        } else if (errorData.message) {
+            errorMessage = errorData.message;
+        } else if (errorData.error) {
+            errorMessage = errorData.error;
+        }
+
+        console.error("Error al consumir API:", errorMessage);
+
         res.status(error.response ? error.response.status : 500).json({
             ok: false,
-            error: "Error en API externa",
-            details: error.response ? error.response.data : error.message,
+            error: errorMessage,
+            creditosRestantes: req.user.creditos 
         });
     }
 };
@@ -134,156 +159,156 @@ const consumirAPI = async (res, url) => {
 // 1 Info. Completa
 app.get("/api/ficha", authMiddleware, creditosMiddleware(30), async (req, res) => {
     const { dni } = req.query;
-    await consumirAPI(res, `https://limpieza-doxin-v2-production.up.railway.app/ficha?dni=${dni}`);
+    await consumirAPI(req, res, `https://limpieza-doxin-v2-production.up.railway.app/ficha?dni=${dni}`);
 });
 
 // 2 Denuncias por placa
 app.get("/api/denuncias-placa", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/denuncias-placa?placa=${req.query.placa}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/denuncias-placa?placa=${req.query.placa}`);
 });
 
 // 3 Sueldos
 app.get("/api/sueldos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/sueldos?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/sueldos?dni=${req.query.dni}`);
 });
 
 // 4 Trabajos
 app.get("/api/trabajos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/trabajos?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/trabajos?dni=${req.query.dni}`);
 });
 
 // 5 Consumos
 app.get("/api/consumos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/consumos?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/consumos?dni=${req.query.dni}`);
 });
 
 // 6 Matrimonios
 app.get("/api/matrimonios", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/matrimonios?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/matrimonios?dni=${req.query.dni}`);
 });
 
 // 7 Empresas
 app.get("/api/empresas", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/empresas?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/empresas?dni=${req.query.dni}`);
 });
 
 // 8 Direcciones
 app.get("/api/direcciones", authMiddleware, creditosMiddleware(10), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/direcciones?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/direcciones?dni=${req.query.dni}`);
 });
 
 // 9 Correos
 app.get("/api/correos", authMiddleware, creditosMiddleware(10), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/correos?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/correos?dni=${req.query.dni}`);
 });
 
 // 10 Sunat DNI o RUC
 app.get("/api/sunat", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/sunat?data=${req.query.data}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/sunat?data=${req.query.data}`);
 });
 
 // 11 Sunat Razon Social
 app.get("/api/sunat-razon", authMiddleware, creditosMiddleware(10), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/sunat-razon?data=${req.query.data}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/sunat-razon?data=${req.query.data}`);
 });
 
 // 12 Fiscalía DNI
 app.get("/api/fiscalia-dni", authMiddleware, creditosMiddleware(15), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/fiscalia-dni?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/fiscalia-dni?dni=${req.query.dni}`);
 });
 
 // 13 Fiscalía Nombres
 app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (req, res) => {
     const { nombres, apepaterno, apematerno } = req.query;
-    await consumirAPI(res, `https://poxy-production.up.railway.app/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
 });
 
 // 14 Reniec
 app.get("/api/reniec", authMiddleware, creditosMiddleware(10), async (req, res) => {
     const { dni, source } = req.query;
-    await consumirAPI(res, `https://poxy-production.up.railway.app/reniec?dni=${dni}&source=${source}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/reniec?dni=${dni}&source=${source}`);
 });
 
 // 15 Árbol Genealógico
 app.get("/api/arbol", authMiddleware, creditosMiddleware(18), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/arbol?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/arbol?dni=${req.query.dni}`);
 });
 
 // 16 Familia 1
 app.get("/api/familia1", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/familia1?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/familia1?dni=${req.query.dni}`);
 });
 
 // 17 Familia 2
 app.get("/api/familia2", authMiddleware, creditosMiddleware(15), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/familia2?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/familia2?dni=${req.query.dni}`);
 });
 
 // 18 Familia 3
 app.get("/api/familia3", authMiddleware, creditosMiddleware(18), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/familia3?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/familia3?dni=${req.query.dni}`);
 });
 
 // 19 Vehículos SUNARP
 app.get("/api/vehiculos", authMiddleware, creditosMiddleware(15), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/vehiculos?placa=${req.query.placa}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/vehiculos?placa=${req.query.placa}`);
 });
 
 // 20 Telefonía por Documento
 app.get("/api/telefonia-doc", authMiddleware, creditosMiddleware(10), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/telefonia-doc?documento=${req.query.documento}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/telefonia-doc?documento=${req.query.documento}`);
 });
 
 // 21 Telefonía por Número
 app.get("/api/telefonia-num", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/telefonia-num?numero=${req.query.numero}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/telefonia-num?numero=${req.query.numero}`);
 });
 
 // 22 Movimientos Migratorios
 app.get("/api/movimientos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/movimientos?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/movimientos?dni=${req.query.dni}`);
 });
 
 // 23 Denuncias Policiales por DNI
 app.get("/api/denuncias-dni", authMiddleware, creditosMiddleware(12), async (req, res) => {
-    await consumirAPI(res, `https://poxy-production.up.railway.app/denuncias-dni?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy-production.up.railway.app/denuncias-dni?dni=${req.query.dni}`);
 });
 
 // -------------------- ENDPOINTS ACTUALIZADOS (poxy2) --------------------
 
 // 24 Consulta de DNI básica
 app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/dni?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/dni?dni=${req.query.dni}`);
 });
 
 // 25 Consulta de RUC
 app.get("/api/ruc", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/ruc?ruc=${req.query.ruc}`);
+    await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/ruc?ruc=${req.query.ruc}`);
 });
 
 // 26 Consulta de RUC (Anexos)
 app.get("/api/ruc-anexo", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
+    await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
 });
 
 // 27 Consulta de RUC (Representante Legal)
 app.get("/api/ruc-representante", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/ruc-representante?ruc=${req.query.ruc}`);
+    await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/ruc-representante?ruc=${req.query.ruc}`);
 });
 
 // 28 Consulta de Carnet de Extranjería (CEE)
 app.get("/api/cee", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/cee?cee=${req.query.cee}`);
+    await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/cee?cee=${req.query.cee}`);
 });
 
 // 29 Consulta de SOAT por Placa
 app.get("/api/soat-placa", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/placa?placa=${req.query.placa}`);
+    await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/placa?placa=${req.query.placa}`);
 });
 
 // 30 Consulta de Licencia de Conducir
 app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res) => {
-    await consumirAPI(res, `https://poxy2-production-987f.up.railway.app/licencia?dni=${req.query.dni}`);
+    await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/licencia?dni=${req.query.dni}`);
 });
 
 // ---------------------------------------------------
