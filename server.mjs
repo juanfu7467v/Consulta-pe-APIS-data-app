@@ -116,13 +116,16 @@ const creditosMiddleware = (costo) => {
 
 // -------------------- HELPER API --------------------
 const procesarRespuesta = (response, user) => {
-    // Si hay un campo `data` en la respuesta
+    // 🔹 Eliminar campos molestos de Lederdata en el nivel raíz
+    delete response["developed-by"];
+    delete response["credits"];
+
+    // 🔹 Si hay un campo `data`, limpiamos también dentro
     if (response.data) {
-        // 🔹 Eliminamos campos de LederData
         delete response.data["developed-by"];
         delete response.data["credits"];
 
-        // 🔹 Agregamos branding de Consulta PE
+        // Agregamos branding personalizado
         response.data.userPlan = {
             tipo: user.tipoPlan,
             creditosRestantes: user.tipoPlan === "creditos" ? user.creditos : null,
