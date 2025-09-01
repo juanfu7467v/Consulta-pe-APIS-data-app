@@ -115,42 +115,51 @@ const creditosMiddleware = (costo) => {
 };
 
 // -------------------- HELPER API --------------------
+const procesarRespuesta = (response, user) => {
+    // Si hay un campo `data` en la respuesta
+    if (response.data) {
+        // Borramos campos no deseados en respuestas exitosas
+        delete response.data["developed-by"];
+        delete response.data["credits"];
+        
+        // Agregamos info. del plan del usuario
+        response.data.userPlan = {
+            tipo: user.tipoPlan,
+            creditosRestantes: user.tipoPlan === "creditos" ? user.creditos : null
+        };
+    }
+    
+    // Si el campo `ok` es falso y hay detalles de error
+    if (response.ok === false && response.details) {
+        // Ocultamos mensajes de error específicos
+        if (response.details.message === "Token con falta de pago, comunicate con soporte por WhatsApp +51 949035687") {
+            response.details.message = "Error en la consulta, intenta nuevamente";
+        }
+        if (response.details.detalle?.message === "Token con falta de pago, comunicate con soporte por WhatsApp +51 949035687") {
+            response.details.detalle.message = "Error en la consulta, intenta nuevamente";
+        }
+        delete response.details.detalle?.plan; // Ocultamos el campo 'plan'
+    }
+
+    return response;
+};
+
 const consumirAPI = async (req, res, url) => {
     try {
         const response = await axios.get(url);
-        
-        // --- PROCESAMIENTO DE RESPUESTA EXITOSA ---
-        const sanitizedData = { ...response.data.data };
-        delete sanitizedData["developed-by"];
-        delete sanitizedData["credits"];
-
-        res.json({ 
-            ok: true, 
-            data: sanitizedData, 
-            creditosRestantes: req.user.creditos 
-        });
-
+        // Procesamos la respuesta antes de enviarla al cliente
+        const processedResponse = procesarRespuesta(response.data, req.user);
+        res.json(processedResponse);
     } catch (error) {
-        // --- PROCESAMIENTO DE RESPUESTA CON ERROR ---
-        const errorData = error.response ? error.response.data : {};
-        let errorMessage = "Error en API externa";
-
-        // Reemplazar mensajes específicos de la API externa
-        if (errorData.details && errorData.details.detalle && errorData.details.detalle.message.includes("Token con falta de pago")) {
-            errorMessage = "Error interno, por favor intenta más tarde o contacta a soporte.";
-        } else if (errorData.message) {
-            errorMessage = errorData.message;
-        } else if (errorData.error) {
-            errorMessage = errorData.error;
-        }
-
-        console.error("Error al consumir API:", errorMessage);
-
-        res.status(error.response ? error.response.status : 500).json({
+        console.error("Error al consumir API:", error.message);
+        const errorResponse = {
             ok: false,
-            error: errorMessage,
-            creditosRestantes: req.user.creditos 
-        });
+            error: "Error en API externa",
+            details: error.response ? error.response.data : error.message,
+        };
+        // Procesamos la respuesta de error
+        const processedErrorResponse = procesarRespuesta(errorResponse, req.user);
+        res.status(error.response ? error.response.status : 500).json(processedErrorResponse);
     }
 };
 
