@@ -1,4 +1,3 @@
-// server.mjs
 import express from "express";
 import admin from "firebase-admin";
 import dotenv from "dotenv";
@@ -172,103 +171,111 @@ const consumirAPI = async (req, res, url) => {
   }
 };
 
-// -------------------- ENDPOINTS --------------------
+// -------------------- ENDPOINTS (Actualizados con las nuevas URLs) --------------------
 
-// 🔹 1 - 23 (LederData - limpiados y personalizados)
+const NEW_API_V1_BASE_URL = "https://banckend-poxyv1-cosultape-masitaprex.fly.dev";
+const NEW_IMAGEN_V2_BASE_URL = "https://imagen-v2.fly.dev";
+const NEW_PDF_V3_BASE_URL = "https://generar-pdf-v3.fly.dev";
+
+// 🔹 1 - 7 (Factiliza)
+app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/dni?dni=${req.query.dni}`);
+});
+app.get("/api/ruc", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/ruc?ruc=${req.query.ruc}`);
+});
+app.get("/api/ruc-anexo", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/ruc-anexo?ruc=${req.query.ruc}`);
+});
+app.get("/api/ruc-representante", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/ruc-representante?ruc=${req.query.ruc}`);
+});
+app.get("/api/cee", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/cee?cee=${req.query.cee}`);
+});
+app.get("/api/soat-placa", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/placa?placa=${req.query.placa}`);
+});
+app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/licencia?dni=${req.query.dni}`);
+});
+
+// 🔹 Ficha en imagen (LederData - 23 avanzados)
 app.get("/api/ficha", authMiddleware, creditosMiddleware(30), async (req, res) => {
-  await consumirAPI(req, res, `https://limpieza-doxin-v2-production.up.railway.app/ficha?dni=${req.query.dni}`);
+  await consumirAPI(req, res, `${NEW_IMAGEN_V2_BASE_URL}/generar-ficha?dni=${req.query.dni}`);
+});
+app.get("/api/reniec", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  const { dni } = req.query;
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/reniec?dni=${dni}`);
+});
+app.get("/api/denuncias-dni", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/denuncias-dni?dni=${req.query.dni}`);
 });
 app.get("/api/denuncias-placa", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/denuncias-placa?placa=${req.query.placa}`);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/denuncias-placa?placa=${req.query.placa}`);
 });
 app.get("/api/sueldos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/sueldos?dni=${req.query.dni}`);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/sueldos?dni=${req.query.dni}`);
 });
 app.get("/api/trabajos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/trabajos?dni=${req.query.dni}`);
-});
-app.get("/api/consumos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/consumos?dni=${req.query.dni}`);
-});
-app.get("/api/matrimonios", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/matrimonios?dni=${req.query.dni}`);
-});
-app.get("/api/empresas", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/empresas?dni=${req.query.dni}`);
-});
-app.get("/api/direcciones", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/direcciones?dni=${req.query.dni}`);
-});
-app.get("/api/correos", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/correos?dni=${req.query.dni}`);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/trabajos?dni=${req.query.dni}`);
 });
 app.get("/api/sunat", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/sunat?data=${req.query.data}`);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/sunat?data=${req.query.data}`);
 });
 app.get("/api/sunat-razon", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/sunat-razon?data=${req.query.data}`);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/sunat-razon?data=${req.query.data}`);
+});
+app.get("/api/consumos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/consumos?dni=${req.query.dni}`);
+});
+app.get("/api/arbol", authMiddleware, creditosMiddleware(18), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/arbol?dni=${req.query.dni}`);
+});
+app.get("/api/familia1", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/familia1?dni=${req.query.dni}`);
+});
+app.get("/api/familia2", authMiddleware, creditosMiddleware(15), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/familia2?dni=${req.query.dni}`);
+});
+app.get("/api/familia3", authMiddleware, creditosMiddleware(18), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/familia3?dni=${req.query.dni}`);
+});
+app.get("/api/movimientos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/movimientos?dni=${req.query.dni}`);
+});
+app.get("/api/matrimonios", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/matrimonios?dni=${req.query.dni}`);
+});
+app.get("/api/empresas", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/empresas?dni=${req.query.dni}`);
+});
+app.get("/api/direcciones", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/direcciones?dni=${req.query.dni}`);
+});
+app.get("/api/correos", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/correos?dni=${req.query.dni}`);
+});
+app.get("/api/telefonia-doc", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/telefonia-doc?documento=${req.query.documento}`);
+});
+app.get("/api/telefonia-num", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/telefonia-num?numero=${req.query.numero}`);
+});
+app.get("/api/vehiculos", authMiddleware, creditosMiddleware(15), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/vehiculos?placa=${req.query.placa}`);
 });
 app.get("/api/fiscalia-dni", authMiddleware, creditosMiddleware(15), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/fiscalia-dni?dni=${req.query.dni}`);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-dni?dni=${req.query.dni}`);
 });
 app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (req, res) => {
   const { nombres, apepaterno, apematerno } = req.query;
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
 });
-app.get("/api/reniec", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  const { dni, source } = req.query;
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/reniec?dni=${dni}&source=${source}`);
-});
-app.get("/api/arbol", authMiddleware, creditosMiddleware(18), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/arbol?dni=${req.query.dni}`);
-});
-app.get("/api/familia1", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/familia1?dni=${req.query.dni}`);
-});
-app.get("/api/familia2", authMiddleware, creditosMiddleware(15), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/familia2?dni=${req.query.dni}`);
-});
-app.get("/api/familia3", authMiddleware, creditosMiddleware(18), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/familia3?dni=${req.query.dni}`);
-});
-app.get("/api/vehiculos", authMiddleware, creditosMiddleware(15), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/vehiculos?placa=${req.query.placa}`);
-});
-app.get("/api/telefonia-doc", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/telefonia-doc?documento=${req.query.documento}`);
-});
-app.get("/api/telefonia-num", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/telefonia-num?numero=${req.query.numero}`);
-});
-app.get("/api/movimientos", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/movimientos?dni=${req.query.dni}`);
-});
-app.get("/api/denuncias-dni", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy-production.up.railway.app/denuncias-dni?dni=${req.query.dni}`);
+app.get("/api/info-total", authMiddleware, creditosMiddleware(50), async (req, res) => {
+    await consumirAPI(req, res, `${NEW_PDF_V3_BASE_URL}/generar-ficha-pdf?dni=${req.query.dni}`);
 });
 
-// 🔹 24 - 30 (Poxy2 - Factiliza)
-app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/dni?dni=${req.query.dni}`);
-});
-app.get("/api/ruc", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/ruc?ruc=${req.query.ruc}`);
-});
-app.get("/api/ruc-anexo", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/ruc-anexo?ruc=${req.query.ruc}`);
-});
-app.get("/api/ruc-representante", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/ruc-representante?ruc=${req.query.ruc}`);
-});
-app.get("/api/cee", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/cee?cee=${req.query.cee}`);
-});
-app.get("/api/soat-placa", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/placa?placa=${req.query.placa}`);
-});
-app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `https://poxy2-production-987f.up.railway.app/licencia?dni=${req.query.dni}`);
-});
 
 // ---------------------------------------------------
 app.get("/", (req, res) => {
