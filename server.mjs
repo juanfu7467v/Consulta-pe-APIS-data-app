@@ -177,7 +177,7 @@ const NEW_API_V1_BASE_URL = "https://banckend-poxyv1-cosultape-masitaprex.fly.de
 const NEW_IMAGEN_V2_BASE_URL = "https://imagen-v2.fly.dev";
 const NEW_PDF_V3_BASE_URL = "https://generar-pdf-v3.fly.dev";
 
-// 🔹 1 - 7 (Factiliza)
+
 app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
   await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/dni?dni=${req.query.dni}`);
 });
@@ -200,7 +200,7 @@ app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res)
   await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/licencia?dni=${req.query.dni}`);
 });
 
-// 🔹 Ficha en imagen (LederData - 23 avanzados)
+
 app.get("/api/ficha", authMiddleware, creditosMiddleware(30), async (req, res) => {
   await consumirAPI(req, res, `${NEW_IMAGEN_V2_BASE_URL}/generar-ficha?dni=${req.query.dni}`);
 });
@@ -284,7 +284,7 @@ app.get("/", (req, res) => {
     mensaje: "🚀 API Consulta PE funcionando correctamente. (CORS habilitado)",
     "consulta-pe": {
       poweredBy: "Consulta PE",
-      info: "API oficial con 30 endpoints activos",
+      info: "API oficial con 30 endpoints v2 activos",
     },
   });
 });
