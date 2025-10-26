@@ -10,6 +10,15 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// --- CONSTANTES PARA LAS BASES DE DATOS ANTIGUAS/EXISTENTES ---
+const NEW_API_V1_BASE_URL = "https://banckend-poxyv1-cosultape-masitaprex.fly.dev";
+const NEW_IMAGEN_V2_BASE_URL = "https://imagen-v2.fly.dev";
+const NEW_PDF_V3_BASE_URL = "https://generar-pdf-v3.fly.dev";
+
+// --- BASE URL PARA LAS NUEVAS APIS (Factiliza reemplazadas) ---
+const NEW_FACTILIZA_BASE_URL = "https://web-production-75681.up.railway.app";
+const NEW_BRANDING = "developer consulta pe"; // Marca a reemplazar
+
 // -------------------- FIREBASE --------------------
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
@@ -114,43 +123,42 @@ const creditosMiddleware = (costo) => {
 };
 
 // -------------------- HELPER API --------------------
-// Función para limpiar la marca de la respuesta de forma recursiva.
-const cleanResponseRecursively = (data) => {
-    const MARCA_A_INTERCEPTAR = "@LEDERDATA_OFC_BOT";
-    if (data === null || typeof data !== 'object') {
-        if (typeof data === 'string' && data.includes(MARCA_A_INTERCEPTAR)) {
-            return data.replace(new RegExp(MARCA_A_INTERCEPTAR, 'g'), "");
-        }
-        return data;
-    }
 
-    if (Array.isArray(data)) {
-        return data.map(item => cleanResponseRecursively(item));
-    }
-
-    const cleanedData = {};
+const replaceBranding = (data) => {
+  if (typeof data === 'string') {
+    // Reemplaza la marca en cadenas de texto
+    return data.replace(/@LEDERDATA_OFC_BOT|@otra|\[FACTILIZA]/g, NEW_BRANDING);
+  }
+  if (Array.isArray(data)) {
+    // Procesa cada elemento si es un array
+    return data.map(item => replaceBranding(item));
+  }
+  if (typeof data === 'object' && data !== null) {
+    // Procesa cada propiedad si es un objeto
+    const newObject = {};
     for (const key in data) {
-        if (Object.prototype.hasOwnProperty.call(data, key)) {
-            if (key === "bot_used" && data[key] === MARCA_A_INTERCEPTAR) {
-                // Interceptamos el campo bot_used si contiene la marca
-                cleanedData[key] = "";
-            } else {
-                cleanedData[key] = cleanResponseRecursively(data[key]);
-            }
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        // Intercepta y reemplaza el valor de "bot_used"
+        if (key === "bot_used") {
+          newObject[key] = NEW_BRANDING;
+        } else {
+          newObject[key] = replaceBranding(data[key]);
         }
+      }
     }
-    return cleanedData;
+    return newObject;
+  }
+  return data;
 };
 
 
 const procesarRespuesta = (response, user) => {
-  // Limpieza profunda de la marca
-  let cleanedResponse = cleanResponseRecursively(response);
-  
-  // 🔹 Eliminar campos molestos de Factiliza/Lederdata
-  delete cleanedResponse["developed-by"];
-  delete cleanedResponse["credits"];
-  // El campo "bot_used" ya fue limpiado por cleanResponseRecursively si tenía la marca.
+  // 🔹 Intercepta y reemplaza la marca en toda la respuesta
+  let processedResponse = replaceBranding(response);
+
+  // 🔹 Eliminar campos molestos
+  delete processedResponse["developed-by"];
+  delete processedResponse["credits"];
 
   // 🔹 Info del plan del usuario
   const userPlan = {
@@ -159,33 +167,34 @@ const procesarRespuesta = (response, user) => {
   };
 
   // 🔹 Si hay un campo `data`, limpiamos y agregamos branding
-  if (cleanedResponse.data) {
-    delete cleanedResponse.data["developed-by"];
-    delete cleanedResponse.data["credits"];
+  if (processedResponse.data) {
+    delete processedResponse.data["developed-by"];
+    delete processedResponse.data["credits"];
 
-    cleanedResponse.data.userPlan = userPlan;
-    cleanedResponse.data["powered-by"] = "Consulta PE";
+    processedResponse.data.userPlan = userPlan;
+    processedResponse.data["powered-by"] = "Consulta PE";
   }
 
   // 🔹 Branding raíz SIEMPRE
-  cleanedResponse["consulta-pe"] = {
+  processedResponse["consulta-pe"] = {
     poweredBy: "Consulta PE",
     userPlan,
   };
 
   // 🔹 Limpiar mensajes de error molestos
-  if (cleanedResponse.ok === false && cleanedResponse.details) {
-    if (cleanedResponse.details.message?.includes("Token con falta de pago")) {
-      cleanedResponse.details.message = "Error en la consulta, intenta nuevamente";
+  if (processedResponse.ok === false && processedResponse.details) {
+    if (processedResponse.details.message?.includes("Token con falta de pago")) {
+      processedResponse.details.message = "Error en la consulta, intenta nuevamente";
     }
-    if (cleanedResponse.details.detalle?.message?.includes("Token con falta de pago")) {
-      cleanedResponse.details.detalle.message = "Error en la consulta, intenta nuevamente";
+    if (processedResponse.details.detalle?.message?.includes("Token con falta de pago")) {
+      processedResponse.details.detalle.message = "Error en la consulta, intenta nuevamente";
     }
-    delete cleanedResponse.details.detalle?.plan;
+    delete processedResponse.details.detalle?.plan;
   }
 
-  return cleanedResponse;
+  return processedResponse;
 };
+
 
 const consumirAPI = async (req, res, url) => {
   try {
@@ -204,208 +213,268 @@ const consumirAPI = async (req, res, url) => {
   }
 };
 
-// -------------------- ENDPOINTS (Nuevas APIs RailWay) --------------------
 
-const NEW_BASE_URL = "https://web-production-75681.up.railway.app";
+// -------------------- ENDPOINTS (Existentes) --------------------
 
+app.get("/api/dni", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/dni?dni=${req.query.dni}`);
+});
+app.get("/api/ruc", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/ruc?ruc=${req.query.ruc}`);
+});
+app.get("/api/ruc-anexo", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/ruc-anexo?ruc=${req.query.ruc}`);
+});
+app.get("/api/ruc-representante", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/ruc-representante?ruc=${req.query.ruc}`);
+});
+app.get("/api/cee", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/cee?cee=${req.query.cee}`);
+});
+app.get("/api/soat-placa", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/placa?placa=${req.query.placa}`);
+});
+app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/licencia?dni=${req.query.dni}`);
+});
+
+
+app.get("/api/ficha", authMiddleware, creditosMiddleware(30), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_IMAGEN_V2_BASE_URL}/generar-ficha?dni=${req.query.dni}`);
+});
+app.get("/api/reniec", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  const { dni } = req.query;
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/reniec?dni=${dni}`);
+});
+app.get("/api/denuncias-dni", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/denuncias-dni?dni=${req.query.dni}`);
+});
+app.get("/api/denuncias-placa", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/denuncias-placa?placa=${req.query.placa}`);
+});
+app.get("/api/sueldos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/sueldos?dni=${req.query.dni}`);
+});
+app.get("/api/trabajos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/trabajos?dni=${req.query.dni}`);
+});
+app.get("/api/sunat", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/sunat?data=${req.query.data}`);
+});
+app.get("/api/sunat-razon", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/sunat-razon?data=${req.query.data}`);
+});
+app.get("/api/consumos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/consumos?dni=${req.query.dni}`);
+});
+app.get("/api/arbol", authMiddleware, creditosMiddleware(18), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/arbol?dni=${req.query.dni}`);
+});
+app.get("/api/familia1", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/familia1?dni=${req.query.dni}`);
+});
+app.get("/api/familia2", authMiddleware, creditosMiddleware(15), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/familia2?dni=${req.query.dni}`);
+});
+app.get("/api/familia3", authMiddleware, creditosMiddleware(18), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/familia3?dni=${req.query.dni}`);
+});
+app.get("/api/movimientos", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/movimientos?dni=${req.query.dni}`);
+});
+app.get("/api/matrimonios", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/matrimonios?dni=${req.query.dni}`);
+});
+app.get("/api/empresas", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/empresas?dni=${req.query.dni}`);
+});
+app.get("/api/direcciones", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/direcciones?dni=${req.query.dni}`);
+});
+app.get("/api/correos", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/correos?dni=${req.query.dni}`);
+});
+app.get("/api/telefonia-doc", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/telefonia-doc?documento=${req.query.documento}`);
+});
+app.get("/api/telefonia-num", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/telefonia-num?numero=${req.query.numero}`);
+});
+app.get("/api/vehiculos", authMiddleware, creditosMiddleware(15), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/vehiculos?placa=${req.query.placa}`);
+});
+app.get("/api/fiscalia-dni", authMiddleware, creditosMiddleware(15), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-dni?dni=${req.query.dni}`);
+});
+app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (req, res) => {
+  const { nombres, apepaterno, apematerno } = req.query;
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
+});
+app.get("/api/info-total", authMiddleware, creditosMiddleware(50), async (req, res) => {
+    await consumirAPI(req, res, `${NEW_PDF_V3_BASE_URL}/generar-ficha-pdf?dni=${req.query.dni}`);
+});
+
+// -------------------- ENDPOINTS (NUEVAS APIS - Reemplazo de Factiliza) --------------------
 
 // 🔹 1. Búsqueda por DNI (8 dígitos)
-app.get("/dni", authMiddleware, creditosMiddleware(4), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dni?dni=${req.query.dni}`);
+app.get("/api/dni-full", authMiddleware, creditosMiddleware(4), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dni?dni=${req.query.dni}`);
 });
-app.get("/c4", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/c4?dni=${req.query.dni}`);
+app.get("/api/c4", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/c4?dni=${req.query.dni}`);
 });
-app.get("/dnivaz", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dnivaz?dni=${req.query.dni}`);
+app.get("/api/dnivaz", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dnivaz?dni=${req.query.dni}`);
 });
-app.get("/dnivam", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dnivam?dni=${req.query.dni}`);
+app.get("/api/dnivam", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dnivam?dni=${req.query.dni}`);
 });
-app.get("/dnivel", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dnivel?dni=${req.query.dni}`);
+app.get("/api/dnivel", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dnivel?dni=${req.query.dni}`);
 });
-app.get("/dniveln", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dniveln?dni=${req.query.dni}`);
+app.get("/api/dniveln", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dniveln?dni=${req.query.dni}`);
 });
-app.get("/fa", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/fa?dni=${req.query.dni}`);
+app.get("/api/fa", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/fa?dni=${req.query.dni}`);
 });
-app.get("/fb", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/fb?dni=${req.query.dni}`);
+app.get("/api/fb", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/fb?dni=${req.query.dni}`);
 });
-app.get("/cnv", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/cnv?dni=${req.query.dni}`);
+app.get("/api/cnv", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/cnv?dni=${req.query.dni}`);
 });
-app.get("/cdef", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/cdef?dni=${req.query.dni}`);
+app.get("/api/cdef", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/cdef?dni=${req.query.dni}`);
 });
-app.get("/actancc", authMiddleware, creditosMiddleware(65), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/actancc?dni=${req.query.dni}`);
+app.get("/api/actancc", authMiddleware, creditosMiddleware(65), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/actancc?dni=${req.query.dni}`);
 });
-app.get("/actamcc", authMiddleware, creditosMiddleware(65), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/actamcc?dni=${req.query.dni}`);
+app.get("/api/actamcc", authMiddleware, creditosMiddleware(65), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/actamcc?dni=${req.query.dni}`);
 });
-app.get("/actadcc", authMiddleware, creditosMiddleware(65), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/actadcc?dni=${req.query.dni}`);
+app.get("/api/actadcc", authMiddleware, creditosMiddleware(65), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/actadcc?dni=${req.query.dni}`);
 });
-app.get("/tra", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/tra?dni=${req.query.dni}`);
+app.get("/api/tra", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/tra?dni=${req.query.dni}`);
 });
-app.get("/sue", authMiddleware, creditosMiddleware(8), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/sue?dni=${req.query.dni}`);
+app.get("/api/sue", authMiddleware, creditosMiddleware(8), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/sue?dni=${req.query.dni}`);
 });
-app.get("/cla", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/cla?dni=${req.query.dni}`);
+app.get("/api/cla", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/cla?dni=${req.query.dni}`);
 });
-app.get("/sune", authMiddleware, creditosMiddleware(4), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/sune?dni=${req.query.dni}`);
+app.get("/api/sune", authMiddleware, creditosMiddleware(4), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/sune?dni=${req.query.dni}`);
 });
-app.get("/cun", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/cun?dni=${req.query.dni}`);
+app.get("/api/cun", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/cun?dni=${req.query.dni}`);
 });
-app.get("/colp", authMiddleware, creditosMiddleware(6), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/colp?dni=${req.query.dni}`);
+app.get("/api/colp", authMiddleware, creditosMiddleware(6), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/colp?dni=${req.query.dni}`);
 });
-app.get("/mine", authMiddleware, creditosMiddleware(4), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/mine?dni=${req.query.dni}`);
+app.get("/api/mine", authMiddleware, creditosMiddleware(4), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/mine?dni=${req.query.dni}`);
 });
-app.get("/afp", authMiddleware, creditosMiddleware(6), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/afp?dni=${req.query.dni}`);
+app.get("/api/afp", authMiddleware, creditosMiddleware(6), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/afp?dni=${req.query.dni}`);
 });
-app.get("/antpen", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/antpen?dni=${req.query.dni}`);
+app.get("/api/antpen", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/antpen?dni=${req.query.dni}`);
 });
-app.get("/antpol", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/antpol?dni=${req.query.dni}`);
+app.get("/api/antpol", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/antpol?dni=${req.query.dni}`);
 });
-app.get("/antjud", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/antjud?dni=${req.query.dni}`);
+app.get("/api/antjud", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/antjud?dni=${req.query.dni}`);
 });
-app.get("/antpenv", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/antpenv?dni=${req.query.dni}`);
+app.get("/api/antpenv", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/antpenv?dni=${req.query.dni}`);
 });
-app.get("/dend", authMiddleware, creditosMiddleware(26), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dend?dni=${req.query.dni}`);
+app.get("/api/dend", authMiddleware, creditosMiddleware(26), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dend?dni=${req.query.dni}`);
 });
-app.get("/fis", authMiddleware, creditosMiddleware(32), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/fis?dni=${req.query.dni}`);
+app.get("/api/fis", authMiddleware, creditosMiddleware(32), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/fis?dni=${req.query.dni}`);
 });
-app.get("/fisdet", authMiddleware, creditosMiddleware(36), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/fisdet?dni=${req.query.dni}`);
+app.get("/api/fisdet", authMiddleware, creditosMiddleware(36), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/fisdet?dni=${req.query.dni}`);
 });
-app.get("/det", authMiddleware, creditosMiddleware(26), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/det?dni=${req.query.dni}`);
+app.get("/api/det", authMiddleware, creditosMiddleware(26), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/det?dni=${req.query.dni}`);
 });
-app.get("/rqh", authMiddleware, creditosMiddleware(8), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/rqh?dni=${req.query.dni}`);
+app.get("/api/rqh", authMiddleware, creditosMiddleware(8), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/rqh?dni=${req.query.dni}`);
 });
-app.get("/meta", authMiddleware, creditosMiddleware(26), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/meta?dni=${req.query.dni}`);
+app.get("/api/meta", authMiddleware, creditosMiddleware(26), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/meta?dni=${req.query.dni}`);
 });
 
 // 🔹 2. Consultas Generales (Query genérico)
-app.get("/osiptel", authMiddleware, creditosMiddleware(10), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/osiptel?query=${req.query.query}`);
+app.get("/api/osiptel", authMiddleware, creditosMiddleware(10), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/osiptel?query=${req.query.query}`);
 });
-app.get("/claro", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/claro?query=${req.query.query}`);
+app.get("/api/claro", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/claro?query=${req.query.query}`);
 });
-app.get("/entel", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/entel?query=${req.query.query}`);
+app.get("/api/entel", authMiddleware, creditosMiddleware(5), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/entel?query=${req.query.query}`);
 });
-// Propiedades SUNARP y SBS no tienen costo de crédito especificado, se usa 5 por defecto (ejemplo)
-app.get("/pro", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/pro?query=${req.query.query}`);
+app.get("/api/pro", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  // Nota: No se especificó el costo para esta, se asume 12 créditos. Si no aplica se debe ajustar.
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/pro?query=${req.query.query}`);
 });
-app.get("/sen", authMiddleware, creditosMiddleware(12), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/sen?query=${req.query.query}`);
+app.get("/api/sen", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/sen?query=${req.query.query}`);
 });
-app.get("/sbs", authMiddleware, creditosMiddleware(5), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/sbs?query=${req.query.query}`);
+app.get("/api/sbs", authMiddleware, creditosMiddleware(12), async (req, res) => {
+  // Nota: No se especificó el costo para esta, se asume 12 créditos. Si no aplica se debe ajustar.
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/sbs?query=${req.query.query}`);
 });
-app.get("/pasaporte", authMiddleware, creditosMiddleware(20), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/pasaporte?query=${req.query.query}`);
+app.get("/api/pasaporte", authMiddleware, creditosMiddleware(20), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/pasaporte?query=${req.query.query}`);
 });
-app.get("/seeker", authMiddleware, creditosMiddleware(28), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/seeker?query=${req.query.query}`);
+app.get("/api/seeker", authMiddleware, creditosMiddleware(28), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/seeker?query=${req.query.query}`);
 });
-app.get("/bdir", authMiddleware, creditosMiddleware(28), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/bdir?query=${req.query.query}`);
+app.get("/api/bdir", authMiddleware, creditosMiddleware(28), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/bdir?query=${req.query.query}`);
 });
-
 
 // 🔹 3. Denuncias Policiales por otros Documentos
-app.get("/dence", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dence?carnet_extranjeria=${req.query.carnet_extranjeria}`);
+app.get("/api/dence", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dence?carnet_extranjeria=${req.query.carnet_extranjeria}`);
 });
-app.get("/denpas", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/denpas?pasaporte=${req.query.pasaporte}`);
+app.get("/api/denpas", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/denpas?pasaporte=${req.query.pasaporte}`);
 });
-app.get("/denci", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/denci?cedula_identidad=${req.query.cedula_identidad}`);
+app.get("/api/denci", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/denci?cedula_identidad=${req.query.cedula_identidad}`);
 });
-app.get("/denp", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/denp?placa=${req.query.placa}`);
+app.get("/api/denp", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/denp?placa=${req.query.placa}`);
 });
-app.get("/denar", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/denar?serie_armamento=${req.query.serie_armamento}`);
+app.get("/api/denar", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/denar?serie_armamento=${req.query.serie_armamento}`);
 });
-app.get("/dencl", authMiddleware, creditosMiddleware(25), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dencl?clave_denuncia=${req.query.clave_denuncia}`);
+app.get("/api/dencl", authMiddleware, creditosMiddleware(25), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dencl?clave_denuncia=${req.query.clave_denuncia}`);
 });
-
 
 // 🔹 4. Consultas Venezolanas
-app.get("/cedula", authMiddleware, creditosMiddleware(4), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/cedula?cedula=${req.query.cedula}`);
+app.get("/api/cedula", authMiddleware, creditosMiddleware(4), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/cedula?cedula=${req.query.cedula}`);
 });
-app.get("/venezolanos_nombres", authMiddleware, creditosMiddleware(4), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_BASE_URL}/venezolanos_nombres?query=${req.query.query}`);
+app.get("/api/venezolanos_nombres", authMiddleware, creditosMiddleware(4), async (req, res) => {
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/venezolanos_nombres?query=${req.query.query}`);
 });
 
 // 🔹 5. Consultas por Nombres (Peruanos)
-app.get("/dni_nombres", authMiddleware, creditosMiddleware(5), async (req, res) => {
+app.get("/api/dni_nombres", authMiddleware, creditosMiddleware(5), async (req, res) => {
   const { nombres, apepaterno, apematerno } = req.query;
-  await consumirAPI(req, res, `${NEW_BASE_URL}/dni_nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dni_nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
 });
-
-// -------------------- ENDPOINTS (APIs Antiguas de Ejemplo - No Tocar) --------------------
-// Nota: Se han eliminado los endpoints antiguos que se habían creado previamente
-// con las URL's NEW_API_V1_BASE_URL, NEW_IMAGEN_V2_BASE_URL, y NEW_PDF_V3_BASE_URL
-// para dar prioridad a los 44 endpoints de RailWay solicitados.
-
-app.get("/api/dni", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto, use /dni" }));
-app.get("/api/ruc", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/ruc-anexo", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/ruc-representante", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/cee", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/soat-placa", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/licencia", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/ficha", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/reniec", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/denuncias-dni", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/denuncias-placa", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/sueldos", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/trabajos", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/sunat", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/sunat-razon", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/consumos", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/arbol", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/familia1", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/familia2", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/familia3", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/movimientos", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/matrimonios", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/empresas", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/direcciones", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/correos", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/telefonia-doc", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/telefonia-num", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/vehiculos", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/fiscalia-dni", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/fiscalia-nombres", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
-app.get("/api/info-total", (req, res) => res.status(404).json({ ok: false, error: "Endpoint obsoleto" }));
 
 
 // ---------------------------------------------------
@@ -415,7 +484,7 @@ app.get("/", (req, res) => {
     mensaje: "🚀 API Consulta PE funcionando correctamente. (CORS habilitado)",
     "consulta-pe": {
       poweredBy: "Consulta PE",
-      info: "API oficial con 44 endpoints activos",
+      info: "API oficial con endpoints actualizados",
     },
   });
 });
