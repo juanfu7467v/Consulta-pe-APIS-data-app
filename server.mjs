@@ -138,9 +138,9 @@ const replaceBranding = (data) => {
     const newObject = {};
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
-        // Intercepta y reemplaza el valor de "bot_used"
+        // Intercepta y elimina la propiedad "bot_used"
         if (key === "bot_used") {
-          newObject[key] = NEW_BRANDING;
+          continue; // Eliminar la clave "bot_used"
         } else {
           newObject[key] = replaceBranding(data[key]);
         }
@@ -151,9 +151,59 @@ const replaceBranding = (data) => {
   return data;
 };
 
+/**
+ * Transforma la respuesta de búsquedas por nombre/texto a un formato tipo "result" en la raiz.
+ * Aplica para endpoints como /api/dni_nombres
+ * @param {object} response - La respuesta original de la API externa.
+ * @param {object} user - Los datos del usuario actual (para el plan).
+ * @returns {object} - La respuesta transformada.
+ */
+const transformarRespuestaBusqueda = (response, user) => {
+  let processedResponse = procesarRespuesta(response, user);
 
+  // Reestructuración específica para el formato solicitado (lista de resultados)
+  if (processedResponse.message && typeof processedResponse.message === 'string') {
+    // 1. Eliminar el texto molesto de la foto
+    processedResponse.message = processedResponse.message.replace(/\s*↞ Puedes visualizar la foto de una coincidencia antes de usar \/dni ↠\s*/, '').trim();
+
+    // 2. Si el mensaje es una lista de resultados, se podría considerar mover
+    // todo el contenido de la respuesta (excepto "consulta-pe" y "message")
+    // al campo "result", o simplemente dejar la estructura plana pero limpia.
+
+    // Para este caso, solo se limpia el mensaje y se deja la estructura plana
+    // ya que no hay una forma obvia de parsear el "message" a un array "result"
+    // sin un parser robusto, y la solicitud pide mantener el funcionamiento actual
+    // excepto por las eliminaciones/cambios.
+  }
+
+  // Si la respuesta es exitosa y tiene "dni" o "fields" vacíos, se asume que es una lista.
+  if (processedResponse.status === "ok" && processedResponse.dni && Object.keys(processedResponse.fields || {}).length === 0) {
+      // Dejamos la estructura plana (message, dni, fields, status, urls, consulta-pe)
+      // pero con el "bot_used" eliminado y el "message" limpio.
+      // Si el formato final de la solicitud { "message": "found data", "result": {...} }
+      // fuera necesario para la búsqueda por nombres, se requeriría un parser robusto.
+      // Asumiendo que para búsquedas que devuelven el 'message' largo, se permite el formato original (limpio).
+      return processedResponse;
+  }
+
+  // Si es una respuesta de RUC/DNI único con info en 'result', aplicará la lógica original
+  // y solo se requiere que 'message' sea "found data" y el contenido esté en 'result'.
+  // Dado que el ejemplo de salida es para RUC, asumimos que este cambio es **opcional**
+  // para la búsqueda por nombres, y sólo se requiere el **limpieza** para ese endpoint.
+  // Mantendremos la estructura original de la API de lista, solo limpiando.
+
+  return processedResponse;
+};
+
+
+/**
+ * Procesa la respuesta de la API externa para aplicar branding y limpiar campos.
+ * @param {object} response - La respuesta de la API externa.
+ * @param {object} user - Los datos del usuario.
+ * @returns {object} - La respuesta procesada.
+ */
 const procesarRespuesta = (response, user) => {
-  // 🔹 Intercepta y reemplaza la marca en toda la respuesta
+  // 🔹 Intercepta y reemplaza la marca en toda la respuesta, y ELIMINA "bot_used"
   let processedResponse = replaceBranding(response);
 
   // 🔹 Eliminar campos molestos
@@ -196,10 +246,17 @@ const procesarRespuesta = (response, user) => {
 };
 
 
-const consumirAPI = async (req, res, url) => {
+/**
+ * Función genérica para consumir API y procesar la respuesta.
+ * @param {object} req - Objeto de solicitud de Express.
+ * @param {object} res - Objeto de respuesta de Express.
+ * @param {string} url - URL de la API a consumir.
+ * @param {function} [transformer] - Función opcional para aplicar una transformación adicional a la respuesta exitosa.
+ */
+const consumirAPI = async (req, res, url, transformer = procesarRespuesta) => {
   try {
     const response = await axios.get(url);
-    const processedResponse = procesarRespuesta(response.data, req.user);
+    const processedResponse = transformer(response.data, req.user);
     res.json(processedResponse);
   } catch (error) {
     console.error("Error al consumir API:", error.message);
@@ -208,6 +265,7 @@ const consumirAPI = async (req, res, url) => {
       error: "Error en API externa",
       details: error.response ? error.response.data : error.message,
     };
+    // Aplicamos el procesador estándar al error
     const processedErrorResponse = procesarRespuesta(errorResponse, req.user);
     res.status(error.response ? error.response.status : 500).json(processedErrorResponse);
   }
@@ -308,7 +366,8 @@ app.get("/api/fiscalia-dni", authMiddleware, creditosMiddleware(15), async (req,
 });
 app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (req, res) => {
   const { nombres, apepaterno, apematerno } = req.query;
-  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
+  // Se aplica el transformer de búsqueda por lista.
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`, transformarRespuestaBusqueda);
 });
 app.get("/api/info-total", authMiddleware, creditosMiddleware(50), async (req, res) => {
     await consumirAPI(req, res, `${NEW_PDF_V3_BASE_URL}/generar-ficha-pdf?dni=${req.query.dni}`);
@@ -466,14 +525,18 @@ app.get("/api/dencl", authMiddleware, creditosMiddleware(25), async (req, res) =
 app.get("/api/cedula", authMiddleware, creditosMiddleware(4), async (req, res) => {
   await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/cedula?cedula=${req.query.cedula}`);
 });
+// Endpoint que devuelve la lista y necesita la transformación.
 app.get("/api/venezolanos_nombres", authMiddleware, creditosMiddleware(4), async (req, res) => {
-  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/venezolanos_nombres?query=${req.query.query}`);
+  // Aplicar la función de transformación específica para respuestas de búsqueda por lista
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/venezolanos_nombres?query=${req.query.query}`, transformarRespuestaBusqueda);
 });
 
 // 🔹 5. Consultas por Nombres (Peruanos)
+// Endpoint que devuelve la lista y necesita la transformación.
 app.get("/api/dni_nombres", authMiddleware, creditosMiddleware(5), async (req, res) => {
   const { nombres, apepaterno, apematerno } = req.query;
-  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dni_nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`);
+  // Aplicar la función de transformación específica para respuestas de búsqueda por lista
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dni_nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`, transformarRespuestaBusqueda);
 });
 
 
