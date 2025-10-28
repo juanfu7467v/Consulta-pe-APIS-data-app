@@ -19,6 +19,11 @@ const NEW_PDF_V3_BASE_URL = "https://generar-pdf-v3.fly.dev";
 const NEW_FACTILIZA_BASE_URL = "https://web-production-75681.up.railway.app";
 const NEW_BRANDING = "developer consulta pe"; // Marca a reemplazar
 
+// --- CLAVE SECRETA DE ADMINISTRADOR ---
+// Reemplaza "YOUR_STRONG_ADMIN_KEY" con una clave segura que usarás para acceder al panel.
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "YOUR_STRONG_ADMIN_KEY";
+
+
 // -------------------- FIREBASE --------------------
 const serviceAccount = {
   type: process.env.FIREBASE_TYPE,
@@ -42,7 +47,14 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// -------------------- MIDDLEWARE --------------------
+// -------------------- MIDDLEWARE (Existentes y Nuevos) --------------------
+
+/**
+ * Middleware para validar el token de API del usuario.
+ * @param {object} req - Objeto de solicitud de Express.
+ * @param {object} res - Objeto de respuesta de Express.
+ * @param {function} next - Función para pasar al siguiente middleware.
+ */
 const authMiddleware = async (req, res, next) => {
   const token = req.headers["x-api-key"];
   if (!token) {
@@ -102,8 +114,38 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+/**
+ * NUEVA FUNCIÓN: Extrae el dominio de origen de la petición.
+ * @param {object} req - Objeto de solicitud de Express.
+ * @returns {string} El host del dominio o "Unknown/Direct Access".
+ */
+const getOriginDomain = (req) => {
+  const origin = req.headers.origin || req.headers.referer;
+  if (!origin) return "Unknown/Direct Access";
+
+  try {
+    // Si se puede parsear como URL (ej. "https://example.com/page"), extrae el host.
+    const url = new URL(origin);
+    return url.host; 
+  } catch (e) {
+    // Si es un valor crudo o inválido, devuelve el valor original.
+    return origin; 
+  }
+};
+
+
+/**
+ * Middleware para gestionar créditos, actualizar la última consulta,
+ * el dominio de origen y crear un registro de log detallado.
+ * @param {number} costo - Costo en créditos de la consulta.
+ */
 const creditosMiddleware = (costo) => {
   return async (req, res, next) => {
+    const domain = getOriginDomain(req);
+    const userRef = db.collection("usuarios").doc(req.user.id);
+    const currentTime = new Date();
+
+    // 1. Lógica de deducción de créditos y actualización de usuario
     if (req.user.tipoPlan === "creditos") {
       if (req.user.creditos < costo) {
         return res.status(402).json({
@@ -111,16 +153,60 @@ const creditosMiddleware = (costo) => {
           error: "Créditos insuficientes, recarga tu plan",
         });
       }
-      const userRef = db.collection("usuarios").doc(req.user.id);
+      // Deduce créditos y actualiza la última consulta y el dominio de uso
       await userRef.update({
         creditos: admin.firestore.FieldValue.increment(-costo),
-        ultimaConsulta: new Date(),
+        ultimaConsulta: currentTime, 
+        ultimoDominio: domain,        
       });
       req.user.creditos -= costo;
+    } else if (req.user.tipoPlan === "ilimitado") {
+        // Solo actualiza la última consulta y el dominio para planes ilimitados
+        await userRef.update({
+            ultimaConsulta: currentTime,
+            ultimoDominio: domain,
+        });
     }
+
+    // 2. NUEVO: Crea una entrada de log detallada en la colección 'api_logs'
+    const logData = {
+        userId: req.user.id,
+        endpoint: req.path,
+        timestamp: currentTime,
+        domain: domain,
+        success: false, // Por defecto es false, se actualiza a true al finalizar la consulta exitosamente
+        cost: costo,
+        queryParams: req.query,
+    };
+    
+    // Almacena el log y guarda la referencia en el objeto de solicitud para actualizarlo más tarde
+    try {
+        const logRef = await db.collection("api_logs").add(logData);
+        req.logRef = logRef; // La referencia al documento de log
+    } catch (e) {
+        console.error("Error al crear el log inicial en Firestore:", e.message);
+        // Continuar de todos modos, el error de log no debe detener la API
+    }
+    
     next();
   };
 };
+
+/**
+ * NUEVO MIDDLEWARE: Protege los endpoints de administración con la clave secreta.
+ * @param {object} req - Objeto de solicitud de Express.
+ * @param {object} res - Objeto de respuesta de Express.
+ * @param {function} next - Función para pasar al siguiente middleware.
+ */
+const adminAuthMiddleware = (req, res, next) => {
+    const adminKey = req.headers["x-admin-key"];
+    if (adminKey === ADMIN_API_KEY) {
+        next();
+    } else {
+        res.status(401).json({ ok: false, error: "Acceso no autorizado al panel de administración. Se requiere la cabecera 'x-admin-key'." });
+    }
+};
+
 
 // -------------------- HELPER API --------------------
 
@@ -247,7 +333,7 @@ const procesarRespuesta = (response, user) => {
 
 
 /**
- * Función genérica para consumir API y procesar la respuesta.
+ * Función genérica para consumir API, procesar la respuesta y actualizar el log.
  * @param {object} req - Objeto de solicitud de Express.
  * @param {object} res - Objeto de respuesta de Express.
  * @param {string} url - URL de la API a consumir.
@@ -257,6 +343,15 @@ const consumirAPI = async (req, res, url, transformer = procesarRespuesta) => {
   try {
     const response = await axios.get(url);
     const processedResponse = transformer(response.data, req.user);
+
+    // NUEVO: Marcar log como exitoso
+    if (req.logRef) {
+        await req.logRef.update({ 
+            success: true, 
+            responseStatus: response.status || 200 
+        });
+    }
+    
     res.json(processedResponse);
   } catch (error) {
     console.error("Error al consumir API:", error.message);
@@ -265,7 +360,17 @@ const consumirAPI = async (req, res, url, transformer = procesarRespuesta) => {
       error: "Error en API externa",
       details: error.response ? error.response.data : error.message,
     };
-    // Aplicamos el procesador estándar al error
+    
+    // NUEVO: Marcar log como fallido (si existe la referencia)
+    if (req.logRef) {
+        await req.logRef.update({ 
+            success: false, 
+            responseStatus: error.response ? error.response.status : 500,
+            errorMessage: error.message 
+        });
+    }
+
+    // Procesar y enviar respuesta de error
     const processedErrorResponse = procesarRespuesta(errorResponse, req.user);
     res.status(error.response ? error.response.status : 500).json(processedErrorResponse);
   }
@@ -539,7 +644,6 @@ app.get("/api/dni_nombres", authMiddleware, creditosMiddleware(5), async (req, r
   await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dni_nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`, transformarRespuestaBusqueda);
 });
 
-
 // ---------------------------------------------------
 app.get("/", (req, res) => {
   res.json({
@@ -552,8 +656,131 @@ app.get("/", (req, res) => {
   });
 });
 
+
+/* ============================
+   NUEVOS ADMIN ENDPOINTS (Panel de Gestión de API)
+============================ */
+
+/**
+ * Endpoint para obtener el listado de todos los usuarios
+ * con información clave para el panel (plan, créditos, última conexión, dominio).
+ * Requiere la clave de administrador en el header 'x-admin-key'.
+ */
+app.get("/admin/users", adminAuthMiddleware, async (req, res) => {
+    try {
+        const usersRef = db.collection("usuarios");
+        const snapshot = await usersRef.get();
+        const users = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                userId: doc.id,
+                email: data.email || 'N/A',
+                tipoPlan: data.tipoPlan,
+                creditos: data.creditos || 0,
+                ultimaConsulta: data.ultimaConsulta ? data.ultimaConsulta.toDate().toISOString() : 'Nunca',
+                ultimoDominio: data.ultimoDominio || 'Desconocido',
+                fechaCreacion: data.fechaCreacion ? data.fechaCreacion.toDate().toISOString() : 'N/A',
+            };
+        });
+        // Ordenar por última consulta (más reciente primero)
+        users.sort((a, b) => new Date(b.ultimaConsulta) - new Date(a.ultimaConsulta));
+
+        res.json({ ok: true, users });
+    } catch (error) {
+        console.error("Error al obtener usuarios:", error);
+        res.status(500).json({ ok: false, error: "Error interno al obtener usuarios" });
+    }
+});
+
+/**
+ * Endpoint para obtener el historial de uso detallado (logs) de un usuario específico.
+ * Muestra el endpoint, el dominio, el costo y el estado de éxito.
+ * Requiere la clave de administrador.
+ */
+app.get("/admin/user/:userId/usage", adminAuthMiddleware, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const limit = parseInt(req.query.limit) || 50; // Limita a las últimas 50 consultas por defecto
+
+        const logsRef = db.collection("api_logs")
+            .where("userId", "==", userId)
+            .orderBy("timestamp", "desc")
+            .limit(limit);
+
+        const snapshot = await logsRef.get();
+        const usage = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                logId: doc.id,
+                endpoint: data.endpoint,
+                timestamp: data.timestamp.toDate().toISOString(),
+                domain: data.domain,
+                cost: data.cost,
+                success: data.success,
+                status: data.responseStatus || 'N/A',
+                query: data.queryParams,
+            };
+        });
+
+        res.json({ ok: true, userId, usage });
+    } catch (error) {
+        console.error(`Error al obtener uso para usuario ${req.params.userId}:`, error);
+        res.status(500).json({ ok: false, error: "Error interno al obtener el uso" });
+    }
+});
+
+/**
+ * Endpoint para obtener un listado de dominios únicos desde donde ha consultado
+ * un usuario específico (para auditoría de origen).
+ * Requiere la clave de administrador.
+ */
+app.get("/admin/user/:userId/domains", adminAuthMiddleware, async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Recuperar un número considerable de logs para determinar los dominios recientes
+        const logsRef = db.collection("api_logs")
+            .where("userId", "==", userId)
+            .orderBy("timestamp", "desc")
+            .limit(500); // Se limita a las últimas 500 peticiones para eficiencia
+
+        const snapshot = await logsRef.get();
+        const domainsMap = new Map();
+
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.domain) {
+                const domain = data.domain;
+                if (!domainsMap.has(domain)) {
+                    domainsMap.set(domain, { 
+                        domain: domain, 
+                        // El firstSeen real sería la última aparición en esta consulta descendente
+                        lastSeen: data.timestamp.toDate().toISOString(),
+                        count: 1
+                    });
+                } else {
+                    const existing = domainsMap.get(domain);
+                    existing.count++;
+                }
+            }
+        });
+        
+        // Convertir el mapa a array y ordenar por la última vez que se vio
+        const uniqueDomains = Array.from(domainsMap.values()).sort((a, b) => {
+             return new Date(b.lastSeen) - new Date(a.lastSeen);
+        });
+
+        res.json({ ok: true, userId, uniqueDomains });
+    } catch (error) {
+        console.error(`Error al obtener dominios para usuario ${req.params.userId}:`, error);
+        res.status(500).json({ ok: false, error: "Error interno al obtener dominios" });
+    }
+});
+
+
 // -------------------- SERVER --------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });
+
