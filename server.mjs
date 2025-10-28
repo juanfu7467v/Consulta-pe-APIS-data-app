@@ -19,9 +19,15 @@ const NEW_PDF_V3_BASE_URL = "https://generar-pdf-v3.fly.dev";
 const NEW_FACTILIZA_BASE_URL = "https://web-production-75681.up.railway.app";
 const NEW_BRANDING = "developer consulta pe"; // Marca a reemplazar
 
-// --- CLAVE SECRETA DE ADMINISTRADOR ---
-// Reemplaza "YOUR_STRONG_ADMIN_KEY" con una clave segura que usarás para acceder al panel.
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "YOUR_STRONG_ADMIN_KEY";
+// --- CLAVE SECRETA DE ADMINISTRADOR (SOLO DESDE VARIABLES DE ENTORNO) ---
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
+
+// 🛑 VERIFICACIÓN CRÍTICA: Si la clave ADMIN no está definida, salimos.
+if (!ADMIN_API_KEY) {
+  console.error("FATAL ERROR: ADMIN_API_KEY no está definida en el entorno. Acceso al panel deshabilitado.");
+  // En un entorno real como Fly.io, puedes elegir lanzar un error o terminar el proceso.
+  // process.exit(1);
+}
 
 
 // -------------------- FIREBASE --------------------
@@ -194,16 +200,23 @@ const creditosMiddleware = (costo) => {
 
 /**
  * NUEVO MIDDLEWARE: Protege los endpoints de administración con la clave secreta.
+ * Usará la clave de ADMIN_API_KEY que viene del entorno.
  * @param {object} req - Objeto de solicitud de Express.
  * @param {object} res - Objeto de respuesta de Express.
  * @param {function} next - Función para pasar al siguiente middleware.
  */
 const adminAuthMiddleware = (req, res, next) => {
+    // Si ADMIN_API_KEY no se cargó (por el chequeo al inicio), deshabilitamos el acceso
+    if (!ADMIN_API_KEY) {
+         return res.status(503).json({ ok: false, error: "Servicio de administración no disponible: Clave de entorno no cargada." });
+    }
+    
     const adminKey = req.headers["x-admin-key"];
     if (adminKey === ADMIN_API_KEY) {
         next();
     } else {
-        res.status(401).json({ ok: false, error: "Acceso no autorizado al panel de administración. Se requiere la cabecera 'x-admin-key'." });
+        // Este es el mensaje de error que recibías
+        res.status(401).json({ ok: false, error: "Clave de administrador Inválida. Acceso no autorizado." });
     }
 };
 
@@ -783,4 +796,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });
-
