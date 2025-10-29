@@ -8,7 +8,24 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+// 🟢 SOLUCIÓN AL ERROR DE CORS: Configuración de CORS más permisiva
+const corsOptions = {
+  // Permitir todos los orígenes
+  origin: "*", 
+  // Permitir los métodos comunes (incluyendo OPTIONS para preflight)
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", 
+  // Permitir encabezados necesarios para la autenticación
+  allowedHeaders: ["Content-Type", "x-api-key", "x-admin-key"], 
+  // Exponer los encabezados para que el frontend pueda leerlos
+  exposedHeaders: ["x-api-key", "x-admin-key"],
+  // Permitir credenciales (si fueran necesarias, aunque con origin: '*' no lo son estrictamente)
+  credentials: true, 
+};
+
+app.use(cors(corsOptions)); // Aplicar la configuración de CORS
+// ----------------------------------------------------
+
 
 // --- CONSTANTES PARA LAS BASES DE DATOS ANTIGUAS/EXISTENTES ---
 const NEW_API_V1_BASE_URL = "https://banckend-poxyv1-cosultape-masitaprex.fly.dev";
@@ -282,7 +299,7 @@ const transformarRespuestaBusqueda = (response, user) => {
       // Si el formato final de la solicitud { "message": "found data", "result": {...} }
       // fuera necesario para la búsqueda por nombres, se requeriría un parser robusto.
       // Asumiendo que para búsquedas que devuelven el 'message' largo, se permite el formato original (limpio).
-      return processedResponse;
+
   }
 
   // Si es una respuesta de RUC/DNI único con info en 'result', aplicará la lógica original
