@@ -3,6 +3,7 @@ import admin from "firebase-admin";
 import dotenv from "dotenv";
 import axios from "axios";
 import cors from "cors";
+import url from "url"; // Importamos el módulo 'url'
 
 dotenv.config();
 
@@ -35,6 +36,9 @@ const NEW_PDF_V3_BASE_URL = "https://generar-pdf-v3.fly.dev";
 // --- BASE URL PARA LAS NUEVAS APIS (Factiliza reemplazadas) ---
 const NEW_FACTILIZA_BASE_URL = "https://web-production-75681.up.railway.app";
 const NEW_BRANDING = "developer consulta pe"; // Marca a reemplazar
+
+// --- URL PARA EL GUARDADO AUTOMÁTICO DEL LOG ---
+const LOG_GUARDADO_BASE_URL = "https://base-datos-consulta-pe.fly.dev/guardar";
 
 // --- CLAVE SECRETA DE ADMINISTRADOR (SOLO DESDE VARIABLES DE ENTORNO) ---
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
@@ -148,8 +152,9 @@ const getOriginDomain = (req) => {
 
   try {
     // Si se puede parsear como URL (ej. "https://example.com/page"), extrae el host.
-    const url = new URL(origin);
-    return url.host; 
+    // Usamos el módulo 'url' (o 'new URL' que está disponible en Node > 10)
+    const parsedUrl = new url.URL(origin);
+    return parsedUrl.host; 
   } catch (e) {
     // Si es un valor crudo o inválido, devuelve el valor original.
     return origin; 
@@ -158,8 +163,8 @@ const getOriginDomain = (req) => {
 
 
 /**
- * Middleware para gestionar créditos, actualizar la última consulta,
- * el dominio de origen y crear un registro de log detallado.
+ * Middleware para gestionar créditos y actualizar la última consulta y el dominio de origen.
+ * ELIMINADA la lógica de guardado de logs en Firestore.
  * @param {number} costo - Costo en créditos de la consulta.
  */
 const creditosMiddleware = (costo) => {
@@ -191,25 +196,12 @@ const creditosMiddleware = (costo) => {
         });
     }
 
-    // 2. NUEVO: Crea una entrada de log detallada en la colección 'api_logs'
-    const logData = {
-        userId: req.user.id,
-        endpoint: req.path,
-        timestamp: currentTime,
+    // Almacena el dominio y el costo en el objeto req para usarlo en 'consumirAPI'
+    req.logData = {
         domain: domain,
-        success: false, // Por defecto es false, se actualiza a true al finalizar la consulta exitosamente
         cost: costo,
-        queryParams: req.query,
+        endpoint: req.path,
     };
-    
-    // Almacena el log y guarda la referencia en el objeto de solicitud para actualizarlo más tarde
-    try {
-        const logRef = await db.collection("api_logs").add(logData);
-        req.logRef = logRef; // La referencia al documento de log
-    } catch (e) {
-        console.error("Error al crear el log inicial en Firestore:", e.message);
-        // Continuar de todos modos, el error de log no debe detener la API
-    }
     
     next();
   };
@@ -239,6 +231,30 @@ const adminAuthMiddleware = (req, res, next) => {
 
 
 // -------------------- HELPER API --------------------
+
+/**
+ * NUEVA FUNCIÓN: Guarda el log en la API externa.
+ * El 'tipo' de archivo de guardado será 'log_consulta'.
+ * @param {object} logData - Datos del log (domain, endpoint, cost, userId, timestamp).
+ */
+const guardarLogExterno = async (logData) => {
+    // Genera un timestamp legible para el guardado
+    const horaConsulta = new Date(logData.timestamp).toISOString();
+    
+    // El 'tipo' se fija a 'log_consulta' para un archivo general de logs
+    const url = `${LOG_GUARDADO_BASE_URL}/log_consulta?host=${encodeURIComponent(logData.domain)}&hora=${encodeURIComponent(horaConsulta)}&endpoint=${encodeURIComponent(logData.endpoint)}&userId=${encodeURIComponent(logData.userId)}&costo=${logData.cost}`;
+    
+    try {
+        // Realiza la petición GET. No se necesita esperar el resultado para no bloquear la respuesta al usuario.
+        // Se puede usar 'axios.get(url)' sin await para hacerlo en "fire and forget" o con await para registrar el error.
+        await axios.get(url);
+        // console.log("Log guardado exitosamente en API externa:", url);
+    } catch (e) {
+        console.error("Error al guardar log en API externa:", e.message);
+        // El error de guardado de log no debe afectar la respuesta al usuario.
+    }
+};
+
 
 const replaceBranding = (data) => {
   if (typeof data === 'string') {
@@ -363,7 +379,7 @@ const procesarRespuesta = (response, user) => {
 
 
 /**
- * Función genérica para consumir API, procesar la respuesta y actualizar el log.
+ * Función genérica para consumir API, procesar la respuesta y AHORA GUARDAR EL LOG EXTERNO.
  * @param {object} req - Objeto de solicitud de Express.
  * @param {object} res - Objeto de respuesta de Express.
  * @param {string} url - URL de la API a consumir.
@@ -374,12 +390,15 @@ const consumirAPI = async (req, res, url, transformer = procesarRespuesta) => {
     const response = await axios.get(url);
     const processedResponse = transformer(response.data, req.user);
 
-    // NUEVO: Marcar log como exitoso
-    if (req.logRef) {
-        await req.logRef.update({ 
-            success: true, 
-            responseStatus: response.status || 200 
-        });
+    // 🟢 NUEVO: Llamar a la función de guardado de log externo solo si la consulta fue exitosa.
+    if (response.status >= 200 && response.status < 300) {
+        const logData = {
+            userId: req.user.id,
+            timestamp: new Date(),
+            ...req.logData, // Incluye domain, endpoint, cost del creditosMiddleware
+        };
+        // Se ejecuta sin 'await' para que no bloquee la respuesta al usuario (fire and forget).
+        guardarLogExterno(logData);
     }
     
     res.json(processedResponse);
@@ -391,15 +410,6 @@ const consumirAPI = async (req, res, url, transformer = procesarRespuesta) => {
       details: error.response ? error.response.data : error.message,
     };
     
-    // NUEVO: Marcar log como fallido (si existe la referencia)
-    if (req.logRef) {
-        await req.logRef.update({ 
-            success: false, 
-            responseStatus: error.response ? error.response.status : 500,
-            errorMessage: error.message 
-        });
-    }
-
     // Procesar y enviar respuesta de error
     const processedErrorResponse = procesarRespuesta(errorResponse, req.user);
     res.status(error.response ? error.response.status : 500).json(processedErrorResponse);
@@ -688,7 +698,8 @@ app.get("/", (req, res) => {
 
 
 /* ============================
-   NUEVOS ADMIN ENDPOINTS (Panel de Gestión de API)
+   ADMIN ENDPOINTS (Panel de Gestión de API) - SOLO USUARIOS
+   *** LOS ENDPOINTS DE LOGS FUERON ELIMINADOS ***
 ============================ */
 
 /**
@@ -719,91 +730,6 @@ app.get("/admin/users", adminAuthMiddleware, async (req, res) => {
     } catch (error) {
         console.error("Error al obtener usuarios:", error);
         res.status(500).json({ ok: false, error: "Error interno al obtener usuarios" });
-    }
-});
-
-/**
- * Endpoint para obtener el historial de uso detallado (logs) de un usuario específico.
- * Muestra el endpoint, el dominio, el costo y el estado de éxito.
- * Requiere la clave de administrador.
- */
-app.get("/admin/user/:userId/usage", adminAuthMiddleware, async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const limit = parseInt(req.query.limit) || 50; // Limita a las últimas 50 consultas por defecto
-
-        const logsRef = db.collection("api_logs")
-            .where("userId", "==", userId)
-            .orderBy("timestamp", "desc")
-            .limit(limit);
-
-        const snapshot = await logsRef.get();
-        const usage = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                logId: doc.id,
-                endpoint: data.endpoint,
-                timestamp: data.timestamp.toDate().toISOString(),
-                domain: data.domain,
-                cost: data.cost,
-                success: data.success,
-                status: data.responseStatus || 'N/A',
-                query: data.queryParams,
-            };
-        });
-
-        res.json({ ok: true, userId, usage });
-    } catch (error) {
-        console.error(`Error al obtener uso para usuario ${req.params.userId}:`, error);
-        res.status(500).json({ ok: false, error: "Error interno al obtener el uso" });
-    }
-});
-
-/**
- * Endpoint para obtener un listado de dominios únicos desde donde ha consultado
- * un usuario específico (para auditoría de origen).
- * Requiere la clave de administrador.
- */
-app.get("/admin/user/:userId/domains", adminAuthMiddleware, async (req, res) => {
-    try {
-        const { userId } = req.params;
-
-        // Recuperar un número considerable de logs para determinar los dominios recientes
-        const logsRef = db.collection("api_logs")
-            .where("userId", "==", userId)
-            .orderBy("timestamp", "desc")
-            .limit(500); // Se limita a las últimas 500 peticiones para eficiencia
-
-        const snapshot = await logsRef.get();
-        const domainsMap = new Map();
-
-        snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            if (data.domain) {
-                const domain = data.domain;
-                if (!domainsMap.has(domain)) {
-                    domainsMap.set(domain, { 
-                        domain: domain, 
-                        // El firstSeen real sería la última aparición en esta consulta descendente
-                        lastSeen: data.timestamp.toDate().toISOString(),
-                        count: 1
-                    });
-                } else {
-                    const existing = domainsMap.get(domain);
-                    existing.count++;
-                }
-            }
-        });
-        
-        // Convertir el mapa a array y ordenar por la última vez que se vio
-        const uniqueDomains = Array.from(domainsMap.values()).sort((a, b) => {
-             return new Date(b.lastSeen) - new Date(a.lastSeen);
-        });
-
-        res.json({ ok: true, userId, uniqueDomains });
-    } catch (error) {
-        console.error(`Error al obtener dominios para usuario ${req.params.userId}:`, error);
-        res.status(500).json({ ok: false, error: "Error interno al obtener dominios" });
     }
 });
 
