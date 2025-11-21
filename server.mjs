@@ -256,7 +256,6 @@ const guardarLogExterno = async (logData) => {
     }
 };
 
-
 const replaceBranding = (data) => {
   if (typeof data === 'string') {
     // Reemplaza la marca en cadenas de texto
@@ -271,9 +270,9 @@ const replaceBranding = (data) => {
     const newObject = {};
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
-        // Intercepta y elimina la propiedad "bot_used"
-        if (key === "bot_used") {
-          continue; // Eliminar la clave "bot_used"
+        // Intercepta y elimina las propiedades "bot", "chat_id" y "bot_used"
+        if (key === "bot_used" || key === "bot" || key === "chat_id") {
+          continue; // Eliminar la clave
         } else {
           newObject[key] = replaceBranding(data[key]);
         }
@@ -299,31 +298,12 @@ const transformarRespuestaBusqueda = (response, user) => {
     // 1. Eliminar el texto molesto de la foto
     processedResponse.message = processedResponse.message.replace(/\s*↞ Puedes visualizar la foto de una coincidencia antes de usar \/dni ↠\s*/, '').trim();
 
-    // 2. Si el mensaje es una lista de resultados, se podría considerar mover
-    // todo el contenido de la respuesta (excepto "consulta-pe" y "message")
-    // al campo "result", o simplemente dejar la estructura plana pero limpia.
-
-    // Para este caso, solo se limpia el mensaje y se deja la estructura plana
-    // ya que no hay una forma obvia de parsear el "message" a un array "result"
-    // sin un parser robusto, y la solicitud pide mantener el funcionamiento actual
-    // excepto por las eliminaciones/cambios.
+    // Si la respuesta es exitosa y tiene "dni" o "fields" vacíos, se asume que es una lista.
+    if (processedResponse.status === "ok" && processedResponse.dni && Object.keys(processedResponse.fields || {}).length === 0) {
+        // Dejamos la estructura plana (message, dni, fields, status, urls, consulta-pe)
+        // con los campos solicitados eliminados y el "message" limpio.
+    }
   }
-
-  // Si la respuesta es exitosa y tiene "dni" o "fields" vacíos, se asume que es una lista.
-  if (processedResponse.status === "ok" && processedResponse.dni && Object.keys(processedResponse.fields || {}).length === 0) {
-      // Dejamos la estructura plana (message, dni, fields, status, urls, consulta-pe)
-      // pero con el "bot_used" eliminado y el "message" limpio.
-      // Si el formato final de la solicitud { "message": "found data", "result": {...} }
-      // fuera necesario para la búsqueda por nombres, se requeriría un parser robusto.
-      // Asumiendo que para búsquedas que devuelven el 'message' largo, se permite el formato original (limpio).
-
-  }
-
-  // Si es una respuesta de RUC/DNI único con info en 'result', aplicará la lógica original
-  // y solo se requiere que 'message' sea "found data" y el contenido esté en 'result'.
-  // Dado que el ejemplo de salida es para RUC, asumimos que este cambio es **opcional**
-  // para la búsqueda por nombres, y sólo se requiere el **limpieza** para ese endpoint.
-  // Mantendremos la estructura original de la API de lista, solo limpiando.
 
   return processedResponse;
 };
@@ -336,7 +316,7 @@ const transformarRespuestaBusqueda = (response, user) => {
  * @returns {object} - La respuesta procesada.
  */
 const procesarRespuesta = (response, user) => {
-  // 🔹 Intercepta y reemplaza la marca en toda la respuesta, y ELIMINA "bot_used"
+  // 🔹 Intercepta y reemplaza la marca en toda la respuesta, y ELIMINA "bot", "chat_id" y "bot_used"
   let processedResponse = replaceBranding(response);
 
   // 🔹 Eliminar campos molestos
@@ -353,14 +333,16 @@ const procesarRespuesta = (response, user) => {
   if (processedResponse.data) {
     delete processedResponse.data["developed-by"];
     delete processedResponse.data["credits"];
-
+    
+    // **NOTA**: Aquí mantenemos "Consulta PE" si el branding original iba dentro de 'data'
     processedResponse.data.userPlan = userPlan;
-    processedResponse.data["powered-by"] = "Consulta PE";
+    processedResponse.data["powered-by"] = "Consulta PE"; 
   }
 
-  // 🔹 Branding raíz SIEMPRE
+  // 🔹 Branding raíz SIEMPRE (Aquí aplicamos el cambio de nombre)
   processedResponse["consulta-pe"] = {
-    poweredBy: "Consulta PE",
+    // ⭐ CAMBIO SOLICITADO AQUÍ: Reemplazar por "Intermediario Consulta Pe v2"
+    poweredBy: "Intermediario Consulta Pe v2",
     userPlan,
   };
 
@@ -759,7 +741,8 @@ app.get("/", (req, res) => {
     ok: true,
     mensaje: "🚀 API Consulta PE funcionando correctamente. (CORS habilitado)",
     "consulta-pe": {
-      poweredBy: "Consulta PE",
+      // ⭐ CAMBIO SOLICITADO AQUÍ: Reemplazar por "Intermediario Consulta Pe v2"
+      poweredBy: "Intermediario Consulta Pe v2",
       info: "API oficial con endpoints actualizados",
     },
   });
