@@ -30,9 +30,8 @@ app.use(cors(corsOptions)); // Aplicar la configuración de CORS
 
 // --- CONSTANTES PARA LAS BASES DE DATOS ANTIGUAS/EXISTENTES ---
 const NEW_API_V1_BASE_URL = "https://banckend-poxyv1-cosultape-masitaprex.fly.dev";
-// ❌ ANTES: const NEW_IMAGEN_V2_BASE_URL = "https://imagen-v2.fly.dev";
-// ✅ AHORA: Usamos la URL de la API reemplazada para el endpoint de Ficha
-const NEW_IMAGEN_V2_BASE_URL = "https://gdni-imagen-v2.fly.dev"; // URL actualizada
+// ⭐ CLAVE: URL de la API de Generación de Ficha (IMAGEN) reemplazada por la nueva URL
+const NEW_IMAGEN_V2_BASE_URL = "https://gdni-imagen-v2.fly.dev"; 
 const NEW_PDF_V3_BASE_URL = "https://generar-pdf-v3.fly.dev";
 
 // --- BASE URL PARA LAS NUEVAS APIS (Factiliza reemplazadas) ---
@@ -385,16 +384,13 @@ const procesarRespuesta = (response, user) => {
  * @param {object} req - Objeto de solicitud de Express.
  * @param {object} res - Objeto de respuesta de Express.
  * @param {string} url - URL de la API a consumir.
- * @param {boolean} isFileDownload - Bandera para saber si se espera un archivo binario.
  * @param {function} [transformer] - Función opcional para aplicar una transformación adicional a la respuesta exitosa.
  */
-const consumirAPI = async (req, res, url, isFileDownload = false, transformer = procesarRespuesta) => {
+const consumirAPI = async (req, res, url, transformer = procesarRespuesta) => {
   try {
-    const response = await axios.get(url, {
-        // Si se espera un archivo, la respuesta debe ser un buffer/stream.
-        responseType: isFileDownload ? 'arraybuffer' : 'json'
-    });
-    
+    const response = await axios.get(url);
+    const processedResponse = transformer(response.data, req.user);
+
     // 🟢 NUEVO: Llamar a la función de guardado de log externo solo si la consulta fue exitosa.
     if (response.status >= 200 && response.status < 300) {
         const logData = {
@@ -405,49 +401,8 @@ const consumirAPI = async (req, res, url, isFileDownload = false, transformer = 
         // Se ejecuta sin 'await' para que no bloquee la respuesta al usuario (fire and forget).
         guardarLogExterno(logData);
     }
-
-    if (isFileDownload) {
-        // --- LÓGICA DE DESCARGA DE ARCHIVO BINARIO (IMAGEN/PDF) ---
-        const imageBuffer = Buffer.from(response.data);
-        
-        // 1. Obtener el nombre de archivo (por ejemplo, del DNI)
-        const dni = req.query.dni || 'archivo'; // Usar 'dni' o un fallback
-
-        // 2. Determinar la extensión y Content-Type (Asumimos PNG o PDF por el contexto de Ficha/PDF)
-        let contentType = 'application/octet-stream';
-        let extension = 'dat'; // Fallback
-        
-        // El endpoint original era /api/ficha, que sugiere una imagen (PNG)
-        if (req.path === '/api/ficha') {
-            contentType = 'image/png';
-            extension = 'png';
-        } 
-        // El endpoint /api/info-total sugiere PDF
-        else if (req.path === '/api/info-total') {
-            contentType = 'application/pdf';
-            extension = 'pdf';
-        }
-        
-        const fileName = `${dni}_${Date.now()}.${extension}`;
-        
-        // 3. Aplicar las cabeceras solicitadas para forzar la descarga
-        res.set({
-            // ⭐ CABECERA CLAVE: Forzar la descarga con el nombre de archivo
-            'Content-Disposition': `attachment; filename="${fileName}"`,
-            // Cabeceras de tipo y longitud
-            'Content-Type': contentType, 
-            'Content-Length': imageBuffer.length 
-        });
-
-        // 4. Enviar el buffer del archivo
-        res.send(imageBuffer);
-        
-    } else {
-        // --- LÓGICA DE RESPUESTA JSON ESTÁNDAR ---
-        const processedResponse = transformer(response.data, req.user);
-        res.json(processedResponse);
-    }
     
+    res.json(processedResponse);
   } catch (error) {
     console.error("Error al consumir API:", error.message);
     const errorResponse = {
@@ -460,6 +415,71 @@ const consumirAPI = async (req, res, url, isFileDownload = false, transformer = 
     const processedErrorResponse = procesarRespuesta(errorResponse, req.user);
     res.status(error.response ? error.response.status : 500).json(processedErrorResponse);
   }
+};
+
+/**
+ * Función específica para consumir APIs que devuelven ARCHIVOS (Imágenes/PDFs)
+ * y que requieren la cabecera 'Content-Disposition' para forzar la descarga.
+ * @param {object} req - Objeto de solicitud de Express.
+ * @param {object} res - Objeto de respuesta de Express.
+ * @param {string} url - URL de la API a consumir.
+ * @param {string} defaultFileName - Nombre de archivo por defecto (ej. 'ficha.png').
+ */
+const consumirApiConDescarga = async (req, res, url, defaultFileName) => {
+    try {
+        // La consulta a la API de generación de imagen devuelve un JSON con la URL de descarga (FILE)
+        const apiResponse = await axios.get(url);
+        const processedResponse = procesarRespuesta(apiResponse.data, req.user);
+
+        // 1. Verificar si la respuesta fue exitosa
+        if (apiResponse.status >= 200 && apiResponse.status < 300) {
+            
+            // 2. Extraer la URL de la imagen/archivo
+            const fileUrl = processedResponse.urls?.FILE;
+            if (!fileUrl) {
+                console.error("Error: URL de archivo no encontrada en la respuesta de la API externa.");
+                throw new Error("Formato de respuesta de la API de archivo inválido.");
+            }
+            
+            // 3. Obtener el nombre de archivo de la URL
+            const urlParts = new URL(fileUrl);
+            // El último segmento del path será el nombre del archivo (ej. d8d4105f076148.png)
+            const fileName = urlParts.pathname.split('/').pop() || defaultFileName;
+            
+            // 4. Aplicar la cabecera de descarga al response final
+            res.set({
+                'Content-Disposition': `attachment; filename="${fileName}"`,
+            });
+
+            // 5. Llamar a la función de guardado de log externo (antes de enviar la respuesta)
+            const logData = {
+                userId: req.user.id,
+                timestamp: new Date(),
+                ...req.logData, 
+            };
+            guardarLogExterno(logData);
+
+            // 6. Enviar la respuesta JSON con la URL para la descarga (el cliente se encargará)
+            // Ya que la API externa devuelve un JSON con la URL, no reenviamos el buffer binario aquí.
+            res.json(processedResponse);
+            
+        } else {
+            // Si la API externa devolvió un error (ej. 404), procesar y enviar.
+            const processedErrorResponse = procesarRespuesta(apiResponse.data, req.user);
+            res.status(apiResponse.status).json(processedErrorResponse);
+        }
+
+    } catch (error) {
+        console.error("Error al consumir API de descarga:", error.message);
+        const errorResponse = {
+            ok: false,
+            error: "Error en API externa de descarga",
+            details: error.response ? error.response.data : error.message,
+        };
+        
+        const processedErrorResponse = procesarRespuesta(errorResponse, req.user);
+        res.status(error.response ? error.response.status : 500).json(processedErrorResponse);
+    }
 };
 
 
@@ -487,13 +507,12 @@ app.get("/api/licencia", authMiddleware, creditosMiddleware(5), async (req, res)
   await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/licencia?dni=${req.query.dni}`);
 });
 
-
-// ⭐ MODIFICACIÓN CLAVE EN ESTA RUTA ⭐
+// ⭐ CLAVE: Endpoint /api/ficha con la nueva URL y el nuevo manejador de descarga
 app.get("/api/ficha", authMiddleware, creditosMiddleware(30), async (req, res) => {
-  // 1. Se usa la URL actualizada: NEW_IMAGEN_V2_BASE_URL (https://gdni-imagen-v2.fly.dev)
-  // 2. Se pasa 'true' como segundo argumento a consumirAPI para habilitar la lógica de descarga de archivo.
-  await consumirAPI(req, res, `${NEW_IMAGEN_V2_BASE_URL}/api/ficha?dni=${req.query.dni}`, true);
+  // Nueva API: https://gdni-imagen-v2.fly.dev/generar-ficha?dni=${dni}
+  await consumirApiConDescarga(req, res, `${NEW_IMAGEN_V2_BASE_URL}/generar-ficha?dni=${req.query.dni}`, 'ficha.png');
 });
+
 app.get("/api/reniec", authMiddleware, creditosMiddleware(10), async (req, res) => {
   const { dni } = req.query;
   await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/reniec?dni=${dni}`);
@@ -561,11 +580,11 @@ app.get("/api/fiscalia-dni", authMiddleware, creditosMiddleware(15), async (req,
 app.get("/api/fiscalia-nombres", authMiddleware, creditosMiddleware(18), async (req, res) => {
   const { nombres, apepaterno, apematerno } = req.query;
   // Se aplica el transformer de búsqueda por lista.
-  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`, false, transformarRespuestaBusqueda);
+  await consumirAPI(req, res, `${NEW_API_V1_BASE_URL}/fiscalia-nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`, transformarRespuestaBusqueda);
 });
 app.get("/api/info-total", authMiddleware, creditosMiddleware(50), async (req, res) => {
-    // Se pasa 'true' para descarga de archivo (PDF)
-    await consumirAPI(req, res, `${NEW_PDF_V3_BASE_URL}/generar-ficha-pdf?dni=${req.query.dni}`, true);
+    // API de PDF, requiere descarga
+    await consumirApiConDescarga(req, res, `${NEW_PDF_V3_BASE_URL}/generar-ficha-pdf?dni=${req.query.dni}`, 'ficha.pdf');
 });
 
 // -------------------- ENDPOINTS (NUEVAS APIS - Reemplazo de Factiliza) --------------------
@@ -723,7 +742,7 @@ app.get("/api/cedula", authMiddleware, creditosMiddleware(4), async (req, res) =
 // Endpoint que devuelve la lista y necesita la transformación.
 app.get("/api/venezolanos_nombres", authMiddleware, creditosMiddleware(4), async (req, res) => {
   // Aplicar la función de transformación específica para respuestas de búsqueda por lista
-  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/venezolanos_nombres?query=${req.query.query}`, false, transformarRespuestaBusqueda);
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/venezolanos_nombres?query=${req.query.query}`, transformarRespuestaBusqueda);
 });
 
 // 🔹 5. Consultas por Nombres (Peruanos)
@@ -731,7 +750,7 @@ app.get("/api/venezolanos_nombres", authMiddleware, creditosMiddleware(4), async
 app.get("/api/dni_nombres", authMiddleware, creditosMiddleware(5), async (req, res) => {
   const { nombres, apepaterno, apematerno } = req.query;
   // Aplicar la función de transformación específica para respuestas de búsqueda por lista
-  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dni_nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`, false, transformarRespuestaBusqueda);
+  await consumirAPI(req, res, `${NEW_FACTILIZA_BASE_URL}/dni_nombres?nombres=${nombres}&apepaterno=${apepaterno}&apematerno=${apematerno}`, transformarRespuestaBusqueda);
 });
 
 // ---------------------------------------------------
