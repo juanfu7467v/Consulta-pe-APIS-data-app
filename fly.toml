@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for consulta-pe-apis-data-app on 2025-11-29T02:32:58Z
+# fly.toml app configuration file generated for consulta-pe-apis-data-v2 on 2025-11-29T03:35:43Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'consulta-pe-apis-data-app'
+app = 'consulta-pe-apis-data-v2'
 primary_region = 'gru'
 
 [build]
